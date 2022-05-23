@@ -5,6 +5,7 @@ Created on Wed May 18 18:11:35 2022
 @author: pro
 """
 import pandas as pd 
+import random
 
 class NestedDichotomie:
     def  __init__(self, learner_class, node):
@@ -70,6 +71,21 @@ class NestedDichotomie:
     def predict_proba(self, X):
         return X.apply(self.predict_proba_single, axis = 1)
     
+    def predict(self, X):
+        probas = self.predict_proba(X)
+        return probas.apply(self.get_probable_class)
+        
+    def get_probable_class(self, probas):
+        p_max = 0
+        i_max = []
+        for i in range(len(probas)):
+            if(probas[i] > p_max):
+                p_max = probas[i]
+                i_max = [i]
+            if(probas[i] == p_max):
+                i_max.append(i)
+        return self.classes[random.choice(i_max)]
+        
     
     def get_estimate(self, x, class_name):
         if(class_name not in self.classes):
@@ -85,3 +101,85 @@ class NestedDichotomie:
         else:
             print("Error in tree structure")
             return 0
+        
+        
+        
+#TEST 
+        
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score
+
+from NestedDichotomie import *
+from BinaryTreeNode import *
+
+t1 = BinaryTreeNode([0, 1, 2])
+t1.left = BinaryTreeNode([0, 1])
+t1.left.left = BinaryTreeNode([0])
+t1.left.right = BinaryTreeNode([1])
+t1.right = BinaryTreeNode([2])
+
+
+t2 = BinaryTreeNode([0, 1, 2])
+t2.left = BinaryTreeNode([0, 2])
+t2.left.left = BinaryTreeNode([0])
+t2.left.right = BinaryTreeNode([2])
+t2.right = BinaryTreeNode([1])
+
+t3 = BinaryTreeNode([0, 1, 2])
+t3.left = BinaryTreeNode([1, 2])
+t3.left.left = BinaryTreeNode([1])
+t3.left.right = BinaryTreeNode([2])
+t3.right = BinaryTreeNode([0])
+
+n1 = NestedDichotomie(LogisticRegression, t1)
+
+
+
+df = pd.read_csv("C:\\Users\\pro\\Downloads\\iris.data")
+
+outcomes = df.iloc[:,4]
+
+le = LabelEncoder()
+outcomes = le.fit_transform(outcomes)
+
+features = df.drop(df.columns[[4]], axis = 1)
+
+#achtung beim erstellen von dummy variablen bei klassen mit vielen ausprägungen
+#features = pd.get_dummies(features)
+
+#sinnvollen wert zum füllen von nans finden
+#features = features.fillna(0.0)
+
+
+X_train, X_test, y_train, y_test = train_test_split(features, outcomes, test_size = 0.3) 
+
+lr_model = LogisticRegression().fit(X_train, y_train)
+
+
+lr_train_pred = lr_model.predict(X_train)
+lr_test_pred = lr_model.predict(X_test)
+
+lr_train_accuracy = accuracy_score(y_train, lr_train_pred)
+lr_test_accuracy = accuracy_score(y_test, lr_test_pred)
+print('The logistic regression training accuracy is', lr_train_accuracy)
+print('The logistic regression test accuracy is', lr_test_accuracy)
+
+
+
+n1.fit(X_train, y_train)
+
+
+dt_train_pred = n1.predict(X_train)
+dt_test_pred = n1.predict(X_test)
+
+dt_train_accuracy = accuracy_score(y_train, dt_train_pred)
+dt_test_accuracy = accuracy_score(y_test, dt_test_pred)
+print('The dt training accuracy is', dt_train_accuracy)
+print('The dt test accuracy is', dt_test_accuracy)
+
+l1 = le.inverse_transform(dt_test_pred)
+l2 = le.inverse_transform(lr_test_pred)
