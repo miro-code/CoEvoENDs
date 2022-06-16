@@ -5,21 +5,17 @@ Created on Wed May 18 18:11:35 2022
 @author: pro
 """
 import pandas as pd 
-import random
+import numpy as np
+import random, util
+from sklearn.linear_model import LogisticRegression
+from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
+from sklearn.utils.multiclass import unique_labels
 
 class NestedDichotomie:
-    def  __init__(self, learner_class, node):
-        self.classes = node.value
-        self.classes.sort()
-        self.base_learner = learner_class()
-        
-        self.left = None
-        self.right = None
-        if(node.left is not None):
-            self.left = NestedDichotomie(learner_class, node.left)
-            self.right = NestedDichotomie(learner_class, node.right)
-        self.X_train = pd.DataFrame()
-        self.y_train = []  
+    def  __init__(self, base_learner_class, blueprint_root):
+        self.blueprint_root = blueprint_root
+        self.base_learner_class = base_learner_class
+
         
     def __str__(self, level = 0):
         result = level * "\t" + str(self.classes) + "\n"
@@ -32,23 +28,37 @@ class NestedDichotomie:
     
     
     def fit(self, X, y):
-        if(len(self.classes) == 1):
+        X, y = check_X_y(X, y)
+        self.classes_ = unique_labels(y)
+        
+        self.base_learner = self.base_learner_class()
+        self.left = None
+        self.right = None
+        if(self.blueprint_root.left is not None):
+            self.left = NestedDichotomie(self.base_learner_class, self.blueprint_root.left)
+            self.right = NestedDichotomie(self.base_learner_class, self.blueprint_root.right)
+        self.X_train = []
+        self.y_train = []
+        if(len(self.blueprint_root.value) == 1):
             return
         for i in range(len(y)):
-            if(y[i] in self.left.classes):
-                self.X_train = self.X_train.append(X.iloc[i, :])
+            if(y[i] in self.left.blueprint_root.value):
+                self.X_train.append(X[i, :])
                 self.y_train.append(0)
-            elif(y[i] in self.right.classes):
-                self.X_train = self.X_train.append(X.iloc[i, :])
+            elif(y[i] in self.right.blueprint_root.value):
+                self.X_train.append(X[i, :])
                 self.y_train.append(1)
-        self.base_learner.fit(self.X_train, self.y_train)
+        presenter = self.y_train
+        self.base_learner.fit(np.array(self.X_train), self.y_train)
         if(self.left is not None):
             self.left.fit(X,y)
             self.right.fit(X,y)
-            
+        return self
+    
     def predict_proba_helper_(self, x):
-        if(len(self.classes) == 1):
-            return {self.classes[0] : 1}
+        if(len(self.blueprint_root.value) == 1):
+            return {self.blueprint_root.value[0] : 1}
+        x = x.reshape(1, -1)
         left_dict = self.left.predict_proba_helper_(x)
         right_dict = self.right.predict_proba_helper_(x)
         left_proba, right_proba = self.base_learner.predict_proba(x)[0]
@@ -56,52 +66,49 @@ class NestedDichotomie:
             left_dict[key] *= left_proba
         for key in right_dict:
             right_dict[key] *= right_proba 
-        
         return left_dict | right_dict
     
     def predict_proba_single(self, x):
-        if(isinstance(x, pd.Series)):
-            x = x.to_numpy().reshape(1,-1)
-        dict = self.predict_proba_helper_(x)
-        classes = list(dict)
+        dic = self.predict_proba_helper_(x)
+        classes = list(dic)
         classes.sort()
-        result = [dict[key] for key in classes]
+        result = [dic[key] for key in classes]
         return result
         
     def predict_proba(self, X):
-        return X.apply(self.predict_proba_single, axis = 1)
+        return np.apply_along_axis(self.predict_proba_single, 1, X)
     
     def predict(self, X):
+        check_is_fitted(self)
+        X = check_array(X)
         probas = self.predict_proba(X)
-        return probas.apply(self.get_probable_class)
+        return np.apply_along_axis(self.get_probable_class, 1, probas)
         
     def get_probable_class(self, probas):
-        p_max = 0
-        i_max = []
-        for i in range(len(probas)):
-            if(probas[i] > p_max):
-                p_max = probas[i]
-                i_max = [i]
-            if(probas[i] == p_max):
-                i_max.append(i)
-        return self.classes[random.choice(i_max)]
+        i = util.i_max_random_tiebreak(probas)
+        return self.blueprint_root.value[i]
         
     
     def get_estimate(self, x, class_name):
-        if(class_name not in self.classes):
+        if(class_name not in self.blueprint_root.value):
             print("class not represented")
             return 0
-        if(len(self.classes) == 1):
+        if(len(self.blueprint_root.value) == 1):
             return 1
-        if(class_name in self.left.clases):
+        if(class_name in self.left.blueprint_root.value):
             return self.base_learner.predict_proba(x)[0][0] * self.left.get_estimate(x, class_name) #prediction for first datapoint 
         
-        elif(class_name in self.right.classes):
+        elif(class_name in self.right.blueprint_root.value):
             return self.base_learner.predict_proba(x)[0][1] * self.left.get_estimate(x, class_name)
         else:
             print("Error in tree structure")
             return 0
         
+    def get_params(self, deep = True):
+        return {
+            "base_learner_class" : self.base_learner_class,
+            "blueprint_root" : self.blueprint_root
+            }
         
         
 #TEST 
@@ -113,8 +120,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score
 
-from NestedDichotomie import *
-from BinaryTreeNode import *
+from util import *
 
 t1 = BinaryTreeNode([0, 1, 2])
 t1.left = BinaryTreeNode([0, 1])
@@ -157,29 +163,31 @@ features = df.drop(df.columns[[4]], axis = 1)
 
 X_train, X_test, y_train, y_test = train_test_split(features, outcomes, test_size = 0.3) 
 
-lr_model = LogisticRegression().fit(X_train, y_train)
-
-
-lr_train_pred = lr_model.predict(X_train)
-lr_test_pred = lr_model.predict(X_test)
-
-lr_train_accuracy = accuracy_score(y_train, lr_train_pred)
-lr_test_accuracy = accuracy_score(y_test, lr_test_pred)
-print('The logistic regression training accuracy is', lr_train_accuracy)
-print('The logistic regression test accuracy is', lr_test_accuracy)
-
-
-
 n1.fit(X_train, y_train)
 
-
-dt_train_pred = n1.predict(X_train)
-dt_test_pred = n1.predict(X_test)
-
-dt_train_accuracy = accuracy_score(y_train, dt_train_pred)
-dt_test_accuracy = accuracy_score(y_test, dt_test_pred)
-print('The dt training accuracy is', dt_train_accuracy)
-print('The dt test accuracy is', dt_test_accuracy)
-
-l1 = le.inverse_transform(dt_test_pred)
-l2 = le.inverse_transform(lr_test_pred)
+# =============================================================================
+# 
+# lr_model = LogisticRegression().fit(X_train, y_train)
+# 
+# 
+# lr_train_pred = lr_model.predict(X_train)
+# lr_test_pred = lr_model.predict(X_test)
+# 
+# lr_train_accuracy = accuracy_score(y_train, lr_train_pred)
+# lr_test_accuracy = accuracy_score(y_test, lr_test_pred)
+# print('The logistic regression training accuracy is', lr_train_accuracy)
+# print('The logistic regression test accuracy is', lr_test_accuracy)
+# 
+# 
+# dt_train_pred = n1.predict(X_train)
+# dt_test_pred = n1.predict(X_test)
+# 
+# dt_train_accuracy = accuracy_score(y_train, dt_train_pred)
+# dt_test_accuracy = accuracy_score(y_test, dt_test_pred)
+# print('The dt training accuracy is', dt_train_accuracy)
+# print('The dt test accuracy is', dt_test_accuracy)
+# 
+# l1 = le.inverse_transform(dt_test_pred)
+# l2 = le.inverse_transform(lr_test_pred)
+# 
+# =============================================================================

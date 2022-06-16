@@ -5,7 +5,7 @@ Created on Sat May 21 18:51:33 2022
 @author: pro
 """
 
-from BinaryTreeNode import BinaryTreeNode
+from util import BinaryTreeNode
 
 class Distance:
     def __init__(self, c1, c2, value):
@@ -34,7 +34,6 @@ class DistanceMatrix:
             for j in range(1+i, len(self.classes)):
                 result.append(Distance(self.classes[i], self.classes[j], distances_raw[pointer]))
                 pointer += 1
-        print([str(r) for r in result])
         return result
 
     
