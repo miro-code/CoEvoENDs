@@ -12,8 +12,7 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
 
 class NestedDichotomie:
-    def  __init__(self, base_learner_class, blueprint_root):
-        self.blueprint_root = blueprint_root
+    def  __init__(self, base_learner_class):
         self.base_learner_class = base_learner_class
 
         
@@ -27,32 +26,38 @@ class NestedDichotomie:
         return result 
     
     
-    def fit(self, X, y):
+    def fit(self, X, y, blueprint_root):
         X, y = check_X_y(X, y)
         self.classes_ = unique_labels(y)
         
+        self.blueprint_root = blueprint_root
+
         self.base_learner = self.base_learner_class()
         self.left = None
         self.right = None
         if(self.blueprint_root.left is not None):
-            self.left = NestedDichotomie(self.base_learner_class, self.blueprint_root.left)
-            self.right = NestedDichotomie(self.base_learner_class, self.blueprint_root.right)
-        self.X_train = []
-        self.y_train = []
+            self.left = NestedDichotomie(self.base_learner_class)
+            self.right = NestedDichotomie(self.base_learner_class)
+        X_train_left = []
+        X_train_right = []
+        y_left = []
+        y_right = []
+        y_train = []
         if(len(self.blueprint_root.value) == 1):
             return
         for i in range(len(y)):
-            if(y[i] in self.left.blueprint_root.value):
-                self.X_train.append(X[i, :])
-                self.y_train.append(0)
-            elif(y[i] in self.right.blueprint_root.value):
-                self.X_train.append(X[i, :])
-                self.y_train.append(1)
-        presenter = self.y_train
-        self.base_learner.fit(np.array(self.X_train), self.y_train)
+            if(y[i] in self.blueprint_root.left.value):
+                X_train_left.append(X[i, :])
+                y_train.append(0)
+                y_left.append(y[i])
+            elif(y[i] in self.blueprint_root.right.value):
+                X_train_right.append(X[i, :])
+                y_train.append(1)
+                y_right.append(y[i])
+        self.base_learner.fit(np.array(X), y_train)
         if(self.left is not None):
-            self.left.fit(X,y)
-            self.right.fit(X,y)
+            self.left.fit(X_train_left, y_left, self.blueprint_root.left)
+            self.right.fit(X_train_right, y_right, self.blueprint_root.right)
         return self
     
     def predict_proba_helper_(self, x):
@@ -141,7 +146,7 @@ t3.left.left = BinaryTreeNode([1])
 t3.left.right = BinaryTreeNode([2])
 t3.right = BinaryTreeNode([0])
 
-n1 = NestedDichotomie(LogisticRegression, t1)
+n1 = NestedDichotomie(LogisticRegression)
 
 
 
@@ -163,7 +168,15 @@ features = df.drop(df.columns[[4]], axis = 1)
 
 X_train, X_test, y_train, y_test = train_test_split(features, outcomes, test_size = 0.3) 
 
-n1.fit(X_train, y_train)
+n1.fit(X_train, y_train, t1)
+
+nd_train_pred = n1.predict(X_train)
+nd_test_pred = n1.predict(X_test)
+nd_train_accuracy = accuracy_score(y_train, nd_train_pred)
+nd_test_accuracy = accuracy_score(y_test, nd_test_pred)
+print('The dt training accuracy is', nd_train_accuracy)
+print('The dt test accuracy is', nd_test_accuracy)
+
 
 # =============================================================================
 # 
