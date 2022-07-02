@@ -26,16 +26,16 @@ class NestedDichotomie:
         return result 
     
     
-    def fit(self, X, y, blueprint_root):
+    def fit(self, X, y, tree):
         X, y = check_X_y(X, y)
         self.classes_ = unique_labels(y)
         
-        self.blueprint_root = blueprint_root
+        self.tree = tree
 
         self.base_learner = self.base_learner_class()
         self.left = None
         self.right = None
-        if(self.blueprint_root.left is not None):
+        if(self.tree.left is not None):
             self.left = NestedDichotomie(self.base_learner_class)
             self.right = NestedDichotomie(self.base_learner_class)
         X_train_left = []
@@ -43,26 +43,26 @@ class NestedDichotomie:
         y_left = []
         y_right = []
         y_train = []
-        if(len(self.blueprint_root.value) == 1):
+        if(len(self.tree.value) == 1):
             return
         for i in range(len(y)):
-            if(y[i] in self.blueprint_root.left.value):
+            if(y[i] in self.tree.left.value):
                 X_train_left.append(X[i, :])
                 y_train.append(0)
                 y_left.append(y[i])
-            elif(y[i] in self.blueprint_root.right.value):
+            elif(y[i] in self.tree.right.value):
                 X_train_right.append(X[i, :])
                 y_train.append(1)
                 y_right.append(y[i])
         self.base_learner.fit(np.array(X), y_train)
         if(self.left is not None):
-            self.left.fit(X_train_left, y_left, self.blueprint_root.left)
-            self.right.fit(X_train_right, y_right, self.blueprint_root.right)
+            self.left.fit(X_train_left, y_left, self.tree.left)
+            self.right.fit(X_train_right, y_right, self.tree.right)
         return self
     
     def predict_proba_helper_(self, x):
-        if(len(self.blueprint_root.value) == 1):
-            return {self.blueprint_root.value[0] : 1}
+        if(len(self.tree.value) == 1):
+            return {self.tree.value[0] : 1}
         x = x.reshape(1, -1)
         left_dict = self.left.predict_proba_helper_(x)
         right_dict = self.right.predict_proba_helper_(x)
@@ -91,19 +91,19 @@ class NestedDichotomie:
         
     def get_probable_class(self, probas):
         i = util.i_max_random_tiebreak(probas)
-        return self.blueprint_root.value[i]
+        return self.tree.value[i]
         
     
     def get_estimate(self, x, class_name):
-        if(class_name not in self.blueprint_root.value):
+        if(class_name not in self.tree.value):
             print("class not represented")
             return 0
-        if(len(self.blueprint_root.value) == 1):
+        if(len(self.tree.value) == 1):
             return 1
-        if(class_name in self.left.blueprint_root.value):
+        if(class_name in self.left.tree.value):
             return self.base_learner.predict_proba(x)[0][0] * self.left.get_estimate(x, class_name) #prediction for first datapoint 
         
-        elif(class_name in self.right.blueprint_root.value):
+        elif(class_name in self.right.tree.value):
             return self.base_learner.predict_proba(x)[0][1] * self.left.get_estimate(x, class_name)
         else:
             print("Error in tree structure")
@@ -112,71 +112,75 @@ class NestedDichotomie:
     def get_params(self, deep = True):
         return {
             "base_learner_class" : self.base_learner_class,
-            "blueprint_root" : self.blueprint_root
+            "tree" : self.tree
             }
         
         
 #TEST 
-        
-import pandas as pd
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score
-
-from util import *
-
-t1 = BinaryTreeNode([0, 1, 2])
-t1.left = BinaryTreeNode([0, 1])
-t1.left.left = BinaryTreeNode([0])
-t1.left.right = BinaryTreeNode([1])
-t1.right = BinaryTreeNode([2])
-
-
-t2 = BinaryTreeNode([0, 1, 2])
-t2.left = BinaryTreeNode([0, 2])
-t2.left.left = BinaryTreeNode([0])
-t2.left.right = BinaryTreeNode([2])
-t2.right = BinaryTreeNode([1])
-
-t3 = BinaryTreeNode([0, 1, 2])
-t3.left = BinaryTreeNode([1, 2])
-t3.left.left = BinaryTreeNode([1])
-t3.left.right = BinaryTreeNode([2])
-t3.right = BinaryTreeNode([0])
-
-n1 = NestedDichotomie(LogisticRegression)
-
-
-
-df = pd.read_csv("C:\\Users\\pro\\Downloads\\iris.data")
-
-outcomes = df.iloc[:,4]
-
-le = LabelEncoder()
-outcomes = le.fit_transform(outcomes)
-
-features = df.drop(df.columns[[4]], axis = 1)
-
-#achtung beim erstellen von dummy variablen bei klassen mit vielen ausprägungen
-#features = pd.get_dummies(features)
-
-#sinnvollen wert zum füllen von nans finden
-#features = features.fillna(0.0)
-
-
-X_train, X_test, y_train, y_test = train_test_split(features, outcomes, test_size = 0.3) 
-
-n1.fit(X_train, y_train, t1)
-
-nd_train_pred = n1.predict(X_train)
-nd_test_pred = n1.predict(X_test)
-nd_train_accuracy = accuracy_score(y_train, nd_train_pred)
-nd_test_accuracy = accuracy_score(y_test, nd_test_pred)
-print('The dt training accuracy is', nd_train_accuracy)
-print('The dt test accuracy is', nd_test_accuracy)
-
+# =============================================================================
+#         
+# import pandas as pd
+# from sklearn.preprocessing import LabelEncoder
+# from sklearn.model_selection import train_test_split
+# from sklearn.linear_model import LogisticRegression
+# from sklearn.tree import DecisionTreeClassifier
+# from sklearn.metrics import accuracy_score
+# 
+# from util import *
+# 
+# t1 = BinaryTreeNode([0, 1, 2])
+# t1.left = BinaryTreeNode([0, 1])
+# t1.left.left = BinaryTreeNode([0])
+# t1.left.right = BinaryTreeNode([1])
+# t1.right = BinaryTreeNode([2])
+# 
+# 
+# t2 = BinaryTreeNode([0, 1, 2])
+# t2.left = BinaryTreeNode([0, 2])
+# t2.left.left = BinaryTreeNode([0])
+# t2.left.right = BinaryTreeNode([2])
+# t2.right = BinaryTreeNode([1])
+# 
+# t3 = BinaryTreeNode([0, 1, 2])
+# t3.left = BinaryTreeNode([1, 2])
+# t3.left.left = BinaryTreeNode([1])
+# t3.left.right = BinaryTreeNode([2])
+# t3.right = BinaryTreeNode([0])
+# 
+# n1 = NestedDichotomie(LogisticRegression)
+# n2 = NestedDichotomie(LogisticRegression)
+# 
+# 
+# 
+# df = pd.read_csv("C:\\Users\\pro\\Downloads\\iris.data")
+# 
+# outcomes = df.iloc[:,4]
+# 
+# le = LabelEncoder()
+# outcomes = le.fit_transform(outcomes)
+# 
+# features = df.drop(df.columns[[4]], axis = 1)
+# 
+# #achtung beim erstellen von dummy variablen bei klassen mit vielen ausprägungen
+# #features = pd.get_dummies(features)
+# 
+# #sinnvollen wert zum füllen von nans finden
+# #features = features.fillna(0.0)
+# 
+# 
+# X_train, X_test, y_train, y_test = train_test_split(features, outcomes, test_size = 0.3) 
+# 
+# n1.fit(X_train, y_train, t1)
+# n2.fit(X_train, y_train, t2)
+# 
+# nd_train_pred = n1.predict(X_train)
+# nd_test_pred = n1.predict(X_test)
+# nd_train_accuracy = accuracy_score(y_train, nd_train_pred)
+# nd_test_accuracy = accuracy_score(y_test, nd_test_pred)
+# print('The dt training accuracy is', nd_train_accuracy)
+# print('The dt test accuracy is', nd_test_accuracy)
+# 
+# =============================================================================
 
 # =============================================================================
 # 

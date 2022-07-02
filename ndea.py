@@ -1,35 +1,32 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Wed May 18 18:11:35 2022
-
-@author: pro
-"""
 
 import random, util
 import numpy as np
 from deap import base, creator, tools
 
-from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.utils.multiclass import unique_labels
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 
 from nested_dichotomies import NestedDichotomie
 from genotype import DistanceMatrix
-from util import BinaryTreeNode
+from util import BinaryTreeNode, Ensemble
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
 
-import time
+import time, openml
 
 def endea(X, y):
-
+    
+    BASE_LEARNER_CLASS = LogisticRegression
     N_VALID_SPLITS = 5
     VALID_SIZE = 0.1
     
     N_POP_ND = 5
     N_POP_ENS = 20
-    N_GEN = 15
+    N_GEN = 5
     CX_PB_ND, MUT_PB_ND = 0.8, 0.8
     MUTATE_ETA_ND = 1
     CX_PB_ENS, MUT_PB_ENS = 0.8, 0.8
@@ -39,7 +36,9 @@ def endea(X, y):
     OFFSPRING_TOURNAMENT_SIZE = 2
     N_SUPPORT_ASSIGNED = 2
     
-    EXPECTED_INIT_ENSEMBLE_SIZE = 5
+    EXPECTED_INIT_ENSEMBLE_SIZE = 20
+    N_TIMES_MORE_ENS_GENS = 1
+    RESET_INTERVAL = 2
     
     classes = unique_labels(y)
     n_classes = len(classes)
@@ -73,7 +72,7 @@ def endea(X, y):
         
         dist_matr = DistanceMatrix(classes, individual)
         tree = dist_matr.build_tree()
-        nd = NestedDichotomie(LogisticRegression)
+        nd = NestedDichotomie(BASE_LEARNER_CLASS)
         
         scores = []
         for i in range(len(y_valids)):
@@ -84,6 +83,7 @@ def endea(X, y):
             valid_accuracy = accuracy_score(y_test, valid_pred)
             scores.append(valid_accuracy)
         accuracy = sum(scores)/len(scores)
+        individual.phenotype = nd
         return accuracy, individual.support
         
     def evaluate_ens(individual):
@@ -146,7 +146,7 @@ def endea(X, y):
         for ind in pop:
             ind.fitness.values = fitness_func(ind)
     
-    def assign_support_single(ens):
+    def assign_weighted_support_single(ens):
         support_weights_all_splits = []
         for i_valid_set in range(N_VALID_SPLITS):
             support_weights = []
@@ -164,7 +164,11 @@ def endea(X, y):
         if(total_weights):
             for i in range(len(ens)):
                 ens[i].fitness.values = (ens[i].fitness.values[0], ens[i].fitness.values[1] + (support_weights_all_splits[i] / total_weights))
-        
+    
+    def assign_support_single(ens):
+        for nd in ens:
+            nd.fitness.values = (nd.fitness.values[0], nd.fitness.values[1] + 1)
+    
     def reset_support(nd_population):
         for ind in nd_population:
             ind.fitness.values = (ind.fitness.values[0], 0.0)
@@ -203,89 +207,77 @@ def endea(X, y):
             
     toolbox.evaluate_population(toolbox.evaluate_nd, nd_population)
     toolbox.evaluate_population(toolbox.evaluate_ens, ens_population)
-
+    top_ens_individual = None
+    start_time = time.time()
+    
+    
     for g in range(N_GEN):
         
         #ND EVOLUTIONARY LOOP
-        if(g % 5 == 0):
-            # Select the offspring
-            nd_offspring = toolbox.offspring(nd_population, N_POP_ND)
-            # Clone the selected individuals
-            nd_offspring = list(map(toolbox.clone, nd_offspring))
-            
-            
-    
-            # Apply crossover and mutation to the nd_offspring
-            for child1, child2 in zip(nd_offspring[::2], nd_offspring[1::2]):
-                genetic_operation((child1, child2), toolbox.mate_nd, CX_PB_ND)                
-                genetic_operation((child1,), toolbox.mutate_nd, MUT_PB_ND)
-                genetic_operation((child2,), toolbox.mutate_nd, MUT_PB_ND)
-    
-                for child in (child1, child2):
-                    if(not child.fitness.valid):
-                        child.gen = g + 1
-                        child.val_predictions = []
-                        child.fitness.values = toolbox.evaluate_nd(child)
-    
-            nd_population[:] = toolbox.select(nd_offspring + nd_population, N_POP_ND)
+        
+        #reset
+        if(g and g % RESET_INTERVAL == 0):
+            nd_population = toolbox.nd_population(N_POP_ND)
+            toolbox.evaluate_population(toolbox.evaluate_nd, nd_population)
+        
+        # Select the offspring
+        nd_offspring = toolbox.offspring(nd_population, N_POP_ND)
+        # Clone the selected individuals
+        nd_offspring = list(map(toolbox.clone, nd_offspring))
+        
+        
+
+        # Apply crossover and mutation to the nd_offspring
+        for child1, child2 in zip(nd_offspring[::2], nd_offspring[1::2]):
+            genetic_operation((child1, child2), toolbox.mate_nd, CX_PB_ND)                
+            genetic_operation((child1,), toolbox.mutate_nd, MUT_PB_ND)
+            genetic_operation((child2,), toolbox.mutate_nd, MUT_PB_ND)
+
+            for child in (child1, child2):
+                if(not child.fitness.valid):
+                    child.gen = g + 1
+                    child.val_predictions = []
+                    child.fitness.values = toolbox.evaluate_nd(child)
+
+        nd_population[:] = toolbox.select(nd_offspring + nd_population, N_POP_ND)
 
         #nd_population += nd_offspring #for debugging
 
-        ens_offspring = toolbox.offspring(ens_population, N_POP_ENS)
-        ens_offspring = list(map(toolbox.clone, ens_offspring))
-
-        for child1, child2 in zip(ens_offspring[::2], ens_offspring[1::2]):
-            genetic_operation((child1, child2), toolbox.mate_ens, CX_PB_ENS)                
-            genetic_operation((child1, nd_population), toolbox.mutate_ens, MUT_PB_ENS)
-            genetic_operation((child2, nd_population), toolbox.mutate_ens, MUT_PB_ENS)
-            for child in (child1, child2):
-                if(not child.fitness.valid):
-                    child.gen = g+1
-                    child.val_predictions = []
-                    child.fitness.values = toolbox.evaluate_ens(child)
-        ens_population[:] = toolbox.select(ens_offspring + ens_population, N_POP_ENS)
+        for i in range(N_TIMES_MORE_ENS_GENS):
+            ens_offspring = toolbox.offspring(ens_population, N_POP_ENS)
+            ens_offspring = list(map(toolbox.clone, ens_offspring))
+    
+            for child1, child2 in zip(ens_offspring[::2], ens_offspring[1::2]):
+                genetic_operation((child1, child2), toolbox.mate_ens, CX_PB_ENS)                
+                genetic_operation((child1, nd_population), toolbox.mutate_ens, MUT_PB_ENS)
+                genetic_operation((child2, nd_population), toolbox.mutate_ens, MUT_PB_ENS)
+                for child in (child1, child2):
+                    if(not child.fitness.valid):
+                        child.gen = g+1
+                        child.val_predictions = []
+                        child.fitness.values = toolbox.evaluate_ens(child)
+            ens_population[:] = toolbox.select(ens_offspring + ens_population, N_POP_ENS)
         toolbox.assign_support(ens_population, nd_population)
-
+        
+        #stopping criteria
+        if(time.time() - start_time < 420):
+            print("Evolutionary run timed out")
+            break
+        
+        if(top_ens_individual != ens_population[0]):
+            top_ens_individual_age = 0
+            top_ens_individual = ens_population[0]
+        else:
+            top_ens_individual_age += 1
+            
+        if(top_ens_individual_age == 15):
+            print("Top ensemble has not changed in 15 generations - stopping the run")
+            break
+        
+        
+        
     return nd_population, ens_population
-
-
-import pandas as pd
-from sklearn.preprocessing import LabelEncoder
-
-
-
-df = pd.read_csv("C:\\Users\\pro\\Downloads\\led24.csv")
-df = df.drop(df.columns[[0]], axis = 1)
-
-# 
-outcomes = df.iloc[:,24]
-
-features = df.drop(df.columns[[24]], axis = 1)
-
-
-# =============================================================================
-# 
-# df = pd.read_csv("C:\\Users\\pro\\Downloads\\iris.data")
-# 
-# outcomes = df.iloc[:,4]
-# 
-# le = LabelEncoder()
-# outcomes = le.fit_transform(outcomes)
-# 
-# features = df.drop(df.columns[[4]], axis = 1)
-# =============================================================================
-
-#X_train, X_test, y_train, y_test = train_test_split(features, outcomes, test_size = 0.3) 
-
-# =============================================================================
-# population = ndea(features, outcomes)
-# population.sort(key = lambda x: x.fitness.values[0])
-# print(population)
-# fitnesses = [i.fitness for i in population]
-# print(fitnesses)
-# generations = [i.gen for i in population]
-# print(generations)
-# =============================================================================
+        
 
 def display_population(pop):
     print(f" number of individuals: {len(pop)} \n")
@@ -311,132 +303,207 @@ def display_population(pop):
         print("Empy population exception")
         
 
-start = time.time()
-
-nd_population, ens_population = endea(features, outcomes)
-
-display_population(nd_population)
-display_population(ens_population)
-
-end = time.time()
-print(end - start)
-
-
-
-
-
-#todo: 
-#implement stopping criteria
-#implement loss instead of accuracy (soft voting style)
-#" logging
-#
-
-
-
-
-
-
-
-###original ndea
-
-
-def mccv(classifier, X, y, cv, valid_size, tree):
-    results = []
-    for i in range(cv):
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = valid_size) 
-        classifier = classifier.fit(X_train, y_train, tree)
-        valid_pred = classifier.predict(X_test)
-        print(y_test)
-        print(valid_pred == y_test)
-        valid_accuracy = accuracy_score(y_test, valid_pred)
-        results.append(valid_accuracy)
-    return results
-        
-
-def ndea(X, y):
+def simple_ndea(X, y, base_learner_class):
+    
+    N_VALID_SPLITS = 5
+    VALID_SIZE = 0.1
+    
+    N_POP_ND = 5
+    N_GEN = 5
+    CX_PB_ND, MUT_PB_ND = 0.8, 0.8
+    MUTATE_ETA_ND = 1
+    
+    OFFSPRING_TOURNAMENT_SIZE = 2
+    
+    RESET_INTERVAL = 5
+    
     classes = unique_labels(y)
     n_classes = len(classes)
-    creator.create("FitnessMax", base.Fitness, weights = (1.0, ))
-    creator.create("Individual", list, fitness = creator.FitnessMax, gen = 0)
     
-    ind_size = int((n_classes * (n_classes - 1)) / 2)
+    creator.create("ND_Fitness", base.Fitness, weights = (1.0,))
+    creator.create("ND_Individual", list, fitness = creator.ND_Fitness, gen = 0, val_predictions = list)
     
-    toolbox = base.Toolbox()
-    toolbox.register("attribute", random.random)
-    toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attribute, n = ind_size)
-    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
     
-    def evaluate(individual):
+    def evaluate_nd(individual):
+        if(individual.val_predictions != []):
+            raise ValueError("ND Individual already contains predictions")
+        
         dist_matr = DistanceMatrix(classes, individual)
         tree = dist_matr.build_tree()
-        nd = NestedDichotomie(LogisticRegression)
-        scores = mccv(nd, X, y, 5, 0.1, tree)
-        #scores = cross_val_score(nd, X, y, cv = 5, scoring = "accuracy")
-        result = sum(scores)/len(scores)
-        return result, 
+        nd = NestedDichotomie(base_learner_class)
         
-            
-    toolbox.register("mate", tools.cxOnePoint)
-    toolbox.register("mutate", tools.mutPolynomialBounded, eta = 0.1, low = 0, up = 1, indpb = 1/ind_size)
-    toolbox.register("select", tools.selNSGA2)
-    toolbox.register("offspring", tools.selTournament, tournsize = 2)
-    toolbox.register("evaluate", evaluate)
+        accuracies = []
+        for i in range(N_VALID_SPLITS):
+            X_train, X_valid , y_train, y_valid = train_test_split(X, y, test_size = VALID_SIZE)
+            nd = nd.fit(X_train, y_train, tree)
+            valid_pred = nd.predict(X_valid)
+            valid_accuracy = accuracy_score(y_valid, valid_pred)
+            accuracies.append(valid_accuracy)
+        #trim accuracies - leave out best and worst
+        accuracies.sort()
+        accuracies.pop(-1)
+        accuracies.pop(0)
+        accuracy = sum(accuracies)/len(accuracies)
+        individual.tree = tree
+        return accuracy,
+        
+    def genetic_operation(parameters, operator, probability):
+        if(not isinstance(parameters, tuple)):
+            raise ValueError("Pass Individual/Parameters as tuple")
+        applied = False
+        if(random.random() < probability):
+            applied = True
+            operator(*parameters)
+            for ind in parameters:
+                try:
+                    del ind.fitness.values
+                except AttributeError:
+                    pass
+        return applied
+                  
+    def evaluate_population(fitness_func, pop):        
+        for ind in pop:
+            ind.fitness.values = fitness_func(ind)
     
-    N_POP = 5
-    pop = toolbox.population(n=N_POP)
-    CXPB, MUTPB, N_GEN = 0.5, 0.2, 2
+    
+    nd_ind_size = int((n_classes * (n_classes - 1)) / 2)
+    gene_mut_prob = 1/nd_ind_size
 
-    # Evaluate the entire population
-    fitnesses = list(map(toolbox.evaluate, pop))
-    for ind, fit in zip(pop, fitnesses):
-        ind.fitness.values = fit
+    toolbox = base.Toolbox()
+    toolbox.register("nd_individual", tools.initRepeat, creator.ND_Individual, random.random, nd_ind_size)
+    toolbox.register("nd_population", tools.initRepeat, list, toolbox.nd_individual)
+    
+    toolbox.register("select", tools.selNSGA2)
+    toolbox.register("offspring", tools.selTournament, tournsize = OFFSPRING_TOURNAMENT_SIZE)
+            
+    toolbox.register("mate_nd", tools.cxOnePoint)
+    toolbox.register("mutate_nd", tools.mutPolynomialBounded, eta = MUTATE_ETA_ND, low = 0, up = 1, indpb = gene_mut_prob)
+    toolbox.register("evaluate_nd", evaluate_nd)
+        
+    toolbox.register("genetic_operation", genetic_operation)
+    toolbox.register("evaluate_population", evaluate_population)
 
+    start_time = time.time()
+    
+    nd_population = toolbox.nd_population(N_POP_ND)
+    toolbox.evaluate_population(toolbox.evaluate_nd, nd_population)
+    top_nd_individual = nd_population[0]
     for g in range(N_GEN):
-        print("\n\n\nGENERATION " + str(g) + "\n")
-        # Select the next generation individuals
-        offspring = toolbox.offspring(pop, len(pop))
+        
+        #ND EVOLUTIONARY LOOP
+        
+        #reset
+        if(g and g % RESET_INTERVAL == 0):
+            nd_population = toolbox.nd_population(N_POP_ND)
+            toolbox.evaluate_population(toolbox.evaluate_nd, nd_population)
+        
+        # Select the offspring
+        nd_offspring = toolbox.offspring(nd_population, N_POP_ND)
         # Clone the selected individuals
-        offspring = list(map(toolbox.clone, offspring))
+        nd_offspring = list(map(toolbox.clone, nd_offspring))
 
-        #sanitycheck
-        for i in range(len(offspring)):
-            for j in range(i + 1, len(offspring)):
-                if(offspring[i] is offspring[j]):
-                    raise BaseException("FUCK")
-        #remember to delete sanity check
+        # Apply crossover and mutation to the nd_offspring
+        for child1, child2 in zip(nd_offspring[::2], nd_offspring[1::2]):
+            genetic_operation((child1, child2), toolbox.mate_nd, CX_PB_ND)                
+            genetic_operation((child1,), toolbox.mutate_nd, MUT_PB_ND)
+            genetic_operation((child2,), toolbox.mutate_nd, MUT_PB_ND)
 
-        # Apply crossover and mutation on the offspring
-        for child1, child2 in zip(offspring[::2], offspring[1::2]):
-            if random.random() < CXPB:
-                toolbox.mate(child1, child2)
-                del child1.fitness.values
-                del child2.fitness.values
+            for child in (child1, child2):
+                if(not child.fitness.valid):
+                    child.gen = g + 1
+                    child.val_predictions = []
+                    child.fitness.values = toolbox.evaluate_nd(child)
 
-        for mutant in offspring:
-            if random.random() < MUTPB:
-                toolbox.mutate(mutant)
-                del mutant.fitness.values
+        nd_population[:] = toolbox.select(nd_offspring + nd_population, N_POP_ND)
 
-        # Evaluate the individuals with an invalid fitness
-        invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-        for ind in invalid_ind:
-            ind.gen = g + 1
-        fitnesses = list(map(toolbox.evaluate, invalid_ind))
-        for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = fit
+        #stopping criteria
+        if(time.time() - start_time < 420):
+            print("Evolutionary run timed out")
+            break
+        
+        if(top_nd_individual != nd_population[0]):
+            top_nd_individual_age = 0
+            top_nd_individual = nd_population[0]
+        else:
+            top_nd_individual += 1
+            
+        if(top_nd_individual_age == 15):
+            print("Top ensemble has not changed in 15 generations - stopping the run")
+            break
+        
+    del creator.ND_Individual
+    del creator.ND_Fitness
+    return nd_population
 
-        # The population is entirely replaced by the offspring
-        pop[:] = toolbox.select(pop + offspring, N_POP)
-    return pop
 
 
-# =============================================================================
-# start = time.time()
-# 
-# nd_population = ndea(features, outcomes)
-# 
-# display_population(nd_population)
-# 
-# end = time.time()
-# print(end - start)
-# =============================================================================
+def simple_ndea_experiment(task_id):
+    BASE_LEARNER_CLASS = LogisticRegression
+    ENSEMBLE_SIZE = 10
+    task = openml.tasks.get_task(task_id)
+    dataset = openml.datasets.get_dataset(task.dataset_id)
+    X, y, categorical_indicator, attribute_names = dataset.get_data(target=dataset.default_target_attribute, dataset_format="dataframe")
+    
+    #preprocessing
+    categorical_features = list(X.columns[categorical_indicator])
+    numeric_features = list(X.columns[~np.array(categorical_indicator)])
+    numeric_transformer = SimpleImputer(strategy="median")
+    categorical_transformer = OneHotEncoder(sparse = False)
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", numeric_transformer, numeric_features),
+            ("cat", categorical_transformer, categorical_features),
+        ]
+    )
+    X = preprocessor.fit_transform(X)
+
+    
+    accuracies = []
+    start = time.time()
+    for i in range(10):
+        train_indices, test_indices = task.get_train_test_split_indices(repeat=0, fold=i, sample=0)
+        X_train, y_train, X_test, y_test = X[train_indices], y[train_indices], X[test_indices], y[test_indices]
+        ensemble = Ensemble()
+        for j in range(ENSEMBLE_SIZE):
+            top_individual_blueprint = simple_ndea(X_train, y_train, BASE_LEARNER_CLASS)[0].tree
+            new_nd = NestedDichotomie(BASE_LEARNER_CLASS)
+            new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
+            ensemble.append(new_nd)
+            print(f"Created {j}th ND for {i}th ensemble")
+        predictions = ensemble.predict(X_test)
+        accuracy = accuracy_score(y_test, predictions)
+        accuracies.append(accuracy)
+    print(f"Achieved average accuracy: {sum(accuracies)/len(accuracies)} in {time.time() - start}s")
+             
+        
+
+
+#simple_ndea_experiment(3022)
+task_id = 3022
+task = openml.tasks.get_task(task_id)
+dataset = openml.datasets.get_dataset(task.dataset_id)
+X, y, categorical_indicator, attribute_names = dataset.get_data(target=dataset.default_target_attribute, dataset_format="dataframe")
+
+#preprocessing
+categorical_features = list(X.columns[categorical_indicator])
+numeric_features = list(X.columns[~np.array(categorical_indicator)])
+numeric_transformer = SimpleImputer(strategy="median")
+categorical_transformer = OneHotEncoder(sparse = False)
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("num", numeric_transformer, numeric_features),
+        ("cat", categorical_transformer, categorical_features),
+    ]
+)
+X = preprocessor.fit_transform(X)
+
+train_indices, test_indices = task.get_train_test_split_indices(repeat=0, fold=0, sample=0)
+X_train, y_train, X_test, y_test = X[train_indices], y[train_indices], X[test_indices], y[test_indices]
+top_individual_blueprint = simple_ndea(X_train, y_train, LogisticRegression)[0].tree
+new_nd = NestedDichotomie(LogisticRegression)
+new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
+prediction = new_nd.predict(X_test)
+accuracy = accuracy_score(y_test, prediction)
+
+
+

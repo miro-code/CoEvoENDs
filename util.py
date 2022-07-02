@@ -31,4 +31,19 @@ def i_max_random_tiebreak(array):
 def max_bincount_random_tiebreak(array):
     bc = np.bincount(array)
     return i_max_random_tiebreak(bc)
+
+
+class Ensemble(list):
+
+    def predict_proba(self, X):
+        proba = self[0].predict_proba(X)
+        for i in range(1,len(self)):
+            proba += self[i].predict_proba(X)
+        return proba/len(self)
+    
+    def predict(self, X):
+        proba = self.predict_proba(X)
+        return np.apply_along_axis(i_max_random_tiebreak, 1, proba)
+        
+    
     
