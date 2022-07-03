@@ -15,6 +15,10 @@ class BinaryTreeNode:
         if(self.right is not None):
             result += self.right.__str__(level + 1)
         return result 
+    def __eq__(self, other):
+        if isinstance(other, BinaryTreeNode):
+            return self.value == other.value and self.left.__eq__(other.left) and self.right.__eq__(other.right)
+        return False
 
 def i_max_random_tiebreak(array):
     v_max = array[0]

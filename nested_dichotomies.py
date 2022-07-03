@@ -14,10 +14,10 @@ from sklearn.utils.multiclass import unique_labels
 class NestedDichotomie:
     def  __init__(self, base_learner_class):
         self.base_learner_class = base_learner_class
-
+        self.classes_ = None
         
     def __str__(self, level = 0):
-        result = level * "\t" + str(self.classes) + "\n"
+        result = level * "\t" + str(self.classes_) + "\n"
         if(self.left is not None):
             result += self.left.__str__(level + 1)
             
@@ -146,6 +146,12 @@ class NestedDichotomie:
 # t3.left.left = BinaryTreeNode([1])
 # t3.left.right = BinaryTreeNode([2])
 # t3.right = BinaryTreeNode([0])
+# 
+# t11 = BinaryTreeNode([0, 1, 2])
+# t11.left = BinaryTreeNode([0, 1])
+# t11.left.left = BinaryTreeNode([0])
+# t11.left.right = BinaryTreeNode([1])
+# t11.right = BinaryTreeNode([2])
 # 
 # n1 = NestedDichotomie(LogisticRegression)
 # n2 = NestedDichotomie(LogisticRegression)
