@@ -485,19 +485,20 @@ def simple_ndea_experiment(task_id):
 #simple_ndea_experiment(3022)
 
 import smtplib, ssl
-def log_result(method, task, accuracy, final_ensemble):
+def log_result(method, task, accuracy, duration, final_ensemble):
     try:
         final_ens_str = str([str(nd) for nd in final_ensemble])
     except:
         final_ens_str = "Representation failed"
         
-    log_message = f"Experiment: {method} on task {task} \naccuracy: {accuracy} final ensemble:{final_ens_str}\n"
+    log_message = f"Experiment: {method} on task {task} \naccuracy: {accuracy}, in {duration} seconds, final ensemble:{final_ens_str}\n"
     with open("log.txt", "a") as f:
         f.write(log_message)
     
 
 
 #single run times
+start_time = time.time()
 task_id = 3022
 task = openml.tasks.get_task(task_id)
 dataset = openml.datasets.get_dataset(task.dataset_id)
@@ -523,7 +524,8 @@ new_nd = NestedDichotomie(LogisticRegression)
 new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
 prediction = new_nd.predict(X_test)
 accuracy = accuracy_score(y_test, prediction)
-log_result("test", task_id, accuracy, [new_nd])
+end_time = time.time()
+log_result("test", task_id, accuracy, end_time - start_time, [new_nd])
 
 
 
