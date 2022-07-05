@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-import random, util, os
+from cmath import exp
+import random, util, os, sys
 import numpy as np
 from deap import base, creator, tools
 
@@ -470,10 +471,10 @@ def simple_ndea(X, y, base_learner_class):
     return nd_population
 
 
-def log_result(experiment_id, method, base_learner, task, fold, accuracy, train_accuracy, duration):
-    log_message = "experiment id: {}, method: {}, base_learner: {} task: {}, fold: {}, accuracy: {}, train_accuracy: {} duration: {}\n".format(experiment_id, method, base_learner, task, fold, accuracy, train_accuracy, duration)
+def log_result(experiment_id, method, base_learner, task, fold, accuracy, train_accuracy, ensemble_size, duration, other_results = None):
+    log_message = "experiment id: {}, method: {}, base_learner: {} task: {}, fold: {}, accuracy: {}, train_accuracy: {}, ensemble_size: {}, duration: {}, other_results = {}\n".format(experiment_id, method, base_learner, task, fold, accuracy, train_accuracy, ensemble_size, duration, other_results)
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, 'results\\test.txt')
+    filename = os.path.join(dirname, 'results\\results.txt')
     
     with open(filename, "a") as f:
         f.write(log_message)
@@ -501,27 +502,38 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
     start_time = time.time()
     train_indices, test_indices = task.get_train_test_split_indices(repeat=0, fold=fold_id, sample=0)
     X_train, y_train, X_test, y_test = X[train_indices], y[train_indices], X[test_indices], y[test_indices]
-    
+    other_results = []
     if(method == "ndea"):
         ENSEMBLE_SIZE = 10
-        ensemble = Ensemble()
+        top_ensemble = Ensemble()
         for j in range(ENSEMBLE_SIZE):
             top_individual=simple_ndea(X_train, y_train, base_learner)[0]
             top_individual_blueprint = top_individual.tree
             train_accuracy=top_individual.fitness.values[0]
             new_nd = NestedDichotomie(base_learner)
             new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
-            ensemble.append(new_nd)
+            top_ensemble.append(new_nd)
             print(f"Created {j}th ND")
     elif(method == "conda"):
-        top_ens_individual = conda(X_train, y_train, base_learner)[1][0]
+        final_population = conda(X_train, y_train, base_learner)[1]
+        top_ens_individual = final_population[0]
         train_accuracy = top_ens_individual.fitness.values[0]
-        ensemble = Ensemble([nd_genotype.phenotype for nd_genotype in top_ens_individual])
-        ensemble.refit(X,y)
+        top_ensemble = Ensemble([nd_genotype.phenotype for nd_genotype in top_ens_individual])
+        top_ensemble.refit(X,y)
+
+        for i in range(1, len(final_population)):
+            ens_individual = final_population[i]
+            train_accuracy = ens_individual.fitness.values[0]
+            ensemble = Ensemble([nd_genotype.phenotype for nd_genotype in ens_individual])
+            ensemble.refit(X,y)
+            ensemble_predictions = top_ensemble.predict(X_test)
+            ensemble_accuracy = accuracy_score(y_test, ensemble_predictions)
+            other_results.append("size: "+ (str(len(ensemble)), "test accuracy:" +str(ensemble_accuracy), "train accuracy: " + str(train_accuracy)))
     else:
         raise ValueError("Method can be 'ndea' or 'conda'")
-    predictions = ensemble.predict(X_test)
+    predictions = top_ensemble.predict(X_test)
     accuracy = accuracy_score(y_test, predictions)
+    ensemble_size = len(top_ensemble)
     duration = time.time() - start_time
     print(f"Achieved average accuracy: {accuracy} in {duration}s")
     if(base_learner == DecisionTreeClassifier):
@@ -531,20 +543,25 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
     else:
         print("Unrecognized base learner")
         base_learner_name = str(base_learner)
-    log_result(experiment_id, method, base_learner_name, task_id, fold_id, accuracy, train_accuracy, duration)
+    log_result(experiment_id, method, base_learner_name, task_id, fold_id, accuracy, train_accuracy, ensemble_size, duration, other_results)
 
 
 #simple_ndea_experiment(6)
 #simple_ndea_experiment(40)
 
-tasks = [6, 40]
+tasks = [2, 7, 9, 40, 146204, 18, 9964, 41, 3022, 145681, 2073]
 base_learners = [DecisionTreeClassifier, DecisionStump]
 
 experiment_configurations = [(method, task_id, fold_id, base_learner) for method in ["ndea", "conda"] for task_id in tasks for fold_id in range(10) for base_learner in base_learners]
 
-experiment_id = 0 #replace
+experiment_id = int(sys.argv[1])
+if(experiment_id < 0 or experiment_id > len(experiment_configurations)-1):
+    raise ValueError("Illegal experiment ID")
+
+
 single_experiment(*experiment_configurations[experiment_id], experiment_id)
 
+#print(len(experiment_configurations))
 
 # =============================================================================
 # 

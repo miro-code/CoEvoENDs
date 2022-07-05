@@ -56,5 +56,5 @@ class Ensemble(list):
         
     
 class DecisionStump(DecisionTreeClassifier):
-    def __init__(self, *, criterion="gini", splitter="best", max_depth=1, min_samples_split=2, min_samples_leaf=1, min_weight_fraction_leaf=0, max_features=None, random_state=None, max_leaf_nodes=None, min_impurity_decrease=0, class_weight=None, ccp_alpha=0):
-        return super().__init__(criterion, splitter, max_depth, min_samples_split, min_samples_leaf, min_weight_fraction_leaf, max_features, random_state, max_leaf_nodes, min_impurity_decrease, class_weight, ccp_alpha)
+    def __init__(self):
+        super().__init__(max_depth=1)

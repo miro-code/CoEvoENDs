@@ -1,1 +1,0 @@
-experiment id: -1, method: conda, base_learner: Decision Tree task: 40, fold: 0, accuracy: 1.0, train_accuracy: 0.68 duration: 6.071333408355713
