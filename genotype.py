@@ -38,7 +38,7 @@ class DistanceMatrix:
 
     
     def build_tree(self):
-        nodes = {c:BinaryTreeNode([c]) for c in self.classes}
+        nodes = {c:BinaryTreeNode({c}) for c in self.classes}
         distinct_nodes = len(self.classes)
         
         for dist in self.distances:
@@ -46,7 +46,7 @@ class DistanceMatrix:
             c2 = dist.class2
             if(nodes[c1] == nodes[c2]):
                 continue
-            new_node = BinaryTreeNode(nodes[c1].value + nodes[c2].value, nodes[c1], nodes[c2])
+            new_node = BinaryTreeNode(nodes[c1].value | nodes[c2].value, nodes[c1], nodes[c2])
             for c in nodes[c1].value:
                 nodes[c] = new_node
             for c in nodes[c2].value:
@@ -57,5 +57,3 @@ class DistanceMatrix:
         return nodes.popitem()[1] #pops key value pair
         
 
-d = DistanceMatrix(["A","B","C","D"], [0,2,3,4,5,1])
-t = d.build_tree()

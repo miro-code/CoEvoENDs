@@ -14,7 +14,6 @@ from sklearn.utils.multiclass import unique_labels
 class NestedDichotomie:
     def  __init__(self, base_learner_class):
         self.base_learner_class = base_learner_class
-        self.classes_ = None
         
     def __str__(self, level = 0):
         result = level * "\t" + str(self.classes_) + "\n"
@@ -62,7 +61,7 @@ class NestedDichotomie:
     
     def predict_proba_helper_(self, x):
         if(len(self.tree.value) == 1):
-            return {self.tree.value[0] : 1}
+            return {list(self.tree.value)[0] : 1}
         x = x.reshape(1, -1)
         left_dict = self.left.predict_proba_helper_(x)
         right_dict = self.right.predict_proba_helper_(x)
@@ -91,7 +90,7 @@ class NestedDichotomie:
         
     def get_probable_class(self, probas):
         i = util.i_max_random_tiebreak(probas)
-        return self.tree.value[i]
+        return self.classes_[i]
         
     
     def get_estimate(self, x, class_name):
