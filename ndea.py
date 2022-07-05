@@ -234,11 +234,11 @@ def conda(X, y, base_learner_class):
         #reset
         if(g and g % RESET_INTERVAL == 0):
             nd_population[1:] = toolbox.nd_population(N_POP_ND-1)
-            toolbox.evaluate_population(toolbox.evaluate_nd, nd_population)
+            toolbox.evaluate_population(toolbox.evaluate_nd, nd_population[1:])
             
             n_elite = N_POP_ENS // 2
             ens_population[n_elite:] = toolbox.ens_population(N_POP_ENS - n_elite)
-            toolbox.evaluate_population(toolbox.evaluate_ens, ens_population)
+            toolbox.evaluate_population(toolbox.evaluate_ens, ens_population[n_elite:])
             
         
         #ND GENERATION
@@ -426,7 +426,7 @@ def simple_ndea(X, y, base_learner_class):
         #reset
         if(g and g % RESET_INTERVAL == 0):
             nd_population[1:] = toolbox.nd_population(N_POP_ND-1)
-            toolbox.evaluate_population(toolbox.evaluate_nd, nd_population)
+            toolbox.evaluate_population(toolbox.evaluate_nd, nd_population[1:])
         
         # Select the offspring
         nd_offspring = toolbox.offspring(nd_population, N_POP_ND)
@@ -549,7 +549,7 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
 #simple_ndea_experiment(6)
 #simple_ndea_experiment(40)
 
-tasks = [2, 7, 9, 40, 146204, 18, 9964, 41, 3022, 145681, 2073]
+tasks = [2, 7, 9, 40, 146204, 18, 9964, 41, 3022, 145681]
 base_learners = [DecisionTreeClassifier, DecisionStump]
 
 experiment_configurations = [(method, task_id, fold_id, base_learner) for method in ["ndea", "conda"] for task_id in tasks for fold_id in range(10) for base_learner in base_learners]
