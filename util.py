@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 import random
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
@@ -58,3 +59,16 @@ class Ensemble(list):
 class DecisionStump(DecisionTreeClassifier):
     def __init__(self):
         super().__init__(max_depth=1)
+
+
+class ConstBaseLearner:
+
+    def fit(self, X, y):
+        if(y[0] != 0 and y[0] != 1):
+            raise ValueError("ConstBaseLearner can only be fitted to 0 or 1")
+        self.y = y[0]
+
+    def predict_proba(self, X):
+        result = [[0, 0]]
+        result[0][self.y] += 1
+        return np.array(result)

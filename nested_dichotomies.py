@@ -26,12 +26,16 @@ class NestedDichotomie:
     
     
     def fit(self, X, y, tree):
-        X, y = check_X_y(X, y)
-        self.classes_ = unique_labels(y)
-        
         self.tree = tree
-
-        self.base_learner = self.base_learner_class()
+        if(len(tree.value) == 1):
+            return
+        self.zero_dichotomy = False
+        if(len(y) == 0):
+            self.zero_dichotomy = True
+            return
+        X, y = check_X_y(X, y)
+        self.classes_ = unique_labels(y) #dont use (only for sklearn) - if classes are missing from y this could lead to problems
+        self.classes = unique_labels(list(tree.value))
         self.left = None
         self.right = None
         if(self.tree.left is not None):
@@ -42,8 +46,6 @@ class NestedDichotomie:
         y_left = []
         y_right = []
         y_train = []
-        if(len(self.tree.value) == 1):
-            return
         for i in range(len(y)):
             if(y[i] in self.tree.left.value):
                 X_train_left.append(X[i, :])
@@ -53,6 +55,13 @@ class NestedDichotomie:
                 X_train_right.append(X[i, :])
                 y_train.append(1)
                 y_right.append(y[i])
+        
+
+        if(len(y_right) > 0 and len(y_left) > 0):
+            self.base_learner = self.base_learner_class()
+        else:
+            self.base_learner = util.ConstBaseLearner() #in case only data points of a single class are available
+
         self.base_learner.fit(np.array(X), y_train)
         if(self.left is not None):
             self.left.fit(X_train_left, y_left, self.tree.left)
@@ -62,6 +71,8 @@ class NestedDichotomie:
     def predict_proba_helper_(self, x):
         if(len(self.tree.value) == 1):
             return {list(self.tree.value)[0] : 1}
+        if(self.zero_dichotomy):
+            return {cls : 0 for cls in list(self.tree.value)}
         x = x.reshape(1, -1)
         left_dict = self.left.predict_proba_helper_(x)
         right_dict = self.right.predict_proba_helper_(x)
@@ -90,7 +101,7 @@ class NestedDichotomie:
         
     def get_probable_class(self, probas):
         i = util.i_max_random_tiebreak(probas)
-        return self.classes_[i]
+        return self.classes[i]
         
     
     def get_estimate(self, x, class_name):

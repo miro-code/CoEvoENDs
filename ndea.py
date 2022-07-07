@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-
-from cmath import exp
 import random, util, os, sys
 import numpy as np
 from deap import base, creator, tools
@@ -31,20 +29,20 @@ def conda(X, y, base_learner_class):
     
     N_POP_ND = 16
     N_POP_ENS = 20
-    N_GEN = 1
+    N_GEN = 200
     CX_PB_ND, MUT_PB_ND = 1, 1
-    MUTATE_ETA_ND = 1
-    CX_PB_ENS, MUT_PB_ENS = 1, 1
+    MUTATE_ETA_ND = 30
+    CX_PB_ENS, MUT_PB_ENS = 0.7, 1
     
-    MUT_APPEND_PB_ENS, MUT_REDUCE_PB_ENS, MUT_ALTER_PB_ENS = 0.9, 0.05, 0.9
+    MUT_APPEND_PB_ENS, MUT_REDUCE_PB_ENS, MUT_ALTER_PB_ENS = 0.5, 0.1, 0.9
     JOIN_ENS_TOURNAMENT_SIZE = 2
     OFFSPRING_TOURNAMENT_SIZE = 2
     N_ENS_ASSIGNING_SUPPORT = N_POP_ENS
     
     EXPECTED_INIT_ENSEMBLE_SIZE = 20
     N_TIMES_MORE_ENS_GENS = 5
-    RESET_INTERVAL = 5
-    TIMEOUT = 420*10
+    RESET_INTERVAL = 5 
+    TIMEOUT = 420*10*2
     classes = unique_labels(y)
     n_classes = len(classes)
     X_trains, X_valids, y_trains, y_valids = [], [], [], []
@@ -88,6 +86,10 @@ def conda(X, y, base_learner_class):
             individual.val_predictions.append(valid_pred)
             valid_accuracy = accuracy_score(y_test, valid_pred)
             accuracies.append(valid_accuracy)
+        
+        accuracies.sort()
+        accuracies.pop(-1)
+        accuracies.pop(0)
         accuracy = sum(accuracies)/len(accuracies)
         individual.phenotype = nd 
         return accuracy, individual.support
@@ -127,7 +129,7 @@ def conda(X, y, base_learner_class):
             i = random.randint(0, len(individual) - 1)
             #todo: fitness dependent selection
             individual.pop(i)
-        if(random.random() < MUT_APPEND_PB_ENS):
+        if(len(individual) < 40 and random.random() < MUT_APPEND_PB_ENS):
             new_nd = toolbox.join_ens_tournament(nd_population, 1)[0] #tournSel retourns list of selected individuals
             individual.insert(random.randint(0, len(individual)), new_nd)
         if(random.random() < MUT_ALTER_PB_ENS):
@@ -237,7 +239,7 @@ def conda(X, y, base_learner_class):
             toolbox.evaluate_population(toolbox.evaluate_nd, nd_population[1:])
             
             n_elite = N_POP_ENS // 2
-            ens_population[n_elite:] = toolbox.ens_population(N_POP_ENS - n_elite)
+            ens_population[n_elite:] = toolbox.ens_population(N_POP_ENS - n_elite, nd_population)
             toolbox.evaluate_population(toolbox.evaluate_ens, ens_population[n_elite:])
             
         
@@ -294,11 +296,13 @@ def conda(X, y, base_learner_class):
             break
         
         generation_end_time = time.time()
-        print(f"generation {g} took {generation_end_time-generation_start_time}s")
 
         
     del creator.ND_Individual
     del creator.ND_Fitness
+    del creator.Ens_Individual
+    del creator.Ens_Fitness
+
         
     return nd_population, ens_population
         
@@ -332,13 +336,13 @@ def simple_ndea(X, y, base_learner_class):
     VALID_SIZE = 0.1
     
     N_POP_ND = 16
-    N_GEN = 0
-    CX_PB_ND, MUT_PB_ND = 0.9, 0.1 #vorläufige werte von marcel
-    MUTATE_ETA_ND = 1
+    N_GEN = 1 #CHANGE
+    CX_PB_ND, MUT_PB_ND = 1, 1
+    MUTATE_ETA_ND = 30
     
     OFFSPRING_TOURNAMENT_SIZE = 2
     
-    RESET_INTERVAL = 5
+    RESET_INTERVAL = 5 
     
     classes = unique_labels(y)
     n_classes = len(classes)
@@ -355,19 +359,8 @@ def simple_ndea(X, y, base_learner_class):
         accuracies = []
         for i in range(N_VALID_SPLITS):
             X_train, X_valid , y_train, y_valid = train_test_split(X, y, test_size = VALID_SIZE)
-            
-            #start = time.time() #d
-        
             nd = nd.fit(X_train, y_train, tree)
-            
-            #fitted = time.time() #d
-
             valid_pred = nd.predict(X_valid)
-            
-            #prediction= time.time() #d
-            
-            #print(f"fitting for split: {i} took {fitted - start}s and prediction took {prediction - fitted}s thats {(prediction - fitted)/(prediction - start)} of the total runtime") #d
-
             valid_accuracy = accuracy_score(y_valid, valid_pred)
             accuracies.append(valid_accuracy)
         #trim accuracies - leave out best and worst
@@ -463,7 +456,6 @@ def simple_ndea(X, y, base_learner_class):
             break
         
         generation_end_time = time.time()
-        print(f"generation {g} took {generation_end_time-generation_start_time}s")
 
         
     del creator.ND_Individual
@@ -504,7 +496,7 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
     X_train, y_train, X_test, y_test = X[train_indices], y[train_indices], X[test_indices], y[test_indices]
     other_results = []
     if(method == "ndea"):
-        ENSEMBLE_SIZE = 10
+        ENSEMBLE_SIZE = 1 # CHANGE TO 10 DONT FORGET
         top_ensemble = Ensemble()
         for j in range(ENSEMBLE_SIZE):
             top_individual=simple_ndea(X_train, y_train, base_learner)[0]
@@ -513,29 +505,27 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
             new_nd = NestedDichotomie(base_learner)
             new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
             top_ensemble.append(new_nd)
-            print(f"Created {j}th ND")
     elif(method == "conda"):
         final_population = conda(X_train, y_train, base_learner)[1]
         top_ens_individual = final_population[0]
         train_accuracy = top_ens_individual.fitness.values[0]
         top_ensemble = Ensemble([nd_genotype.phenotype for nd_genotype in top_ens_individual])
-        top_ensemble.refit(X,y)
+        top_ensemble.refit(X_train,y_train)
 
         for i in range(1, len(final_population)):
             ens_individual = final_population[i]
             train_accuracy = ens_individual.fitness.values[0]
             ensemble = Ensemble([nd_genotype.phenotype for nd_genotype in ens_individual])
-            ensemble.refit(X,y)
-            ensemble_predictions = top_ensemble.predict(X_test)
+            ensemble.refit(X_train,y_train)
+            ensemble_predictions = ensemble.predict(X_test)
             ensemble_accuracy = accuracy_score(y_test, ensemble_predictions)
-            other_results.append("size: "+ (str(len(ensemble)), "test accuracy:" +str(ensemble_accuracy), "train accuracy: " + str(train_accuracy)))
+            other_results.append(("size: "+ str(len(ensemble)), "test accuracy:" +str(ensemble_accuracy), "train accuracy: " + str(train_accuracy)))
     else:
         raise ValueError("Method can be 'ndea' or 'conda'")
     predictions = top_ensemble.predict(X_test)
     accuracy = accuracy_score(y_test, predictions)
     ensemble_size = len(top_ensemble)
     duration = time.time() - start_time
-    print(f"Achieved average accuracy: {accuracy} in {duration}s")
     if(base_learner == DecisionTreeClassifier):
         base_learner_name = "Decision Tree"
     elif(base_learner == DecisionStump):
@@ -549,17 +539,34 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
 #simple_ndea_experiment(6)
 #simple_ndea_experiment(40)
 
-tasks = [2, 7, 9, 40, 146204, 18, 9964, 41, 3022, 145681]
-base_learners = [DecisionTreeClassifier, DecisionStump]
+def main():
+    tasks = [2, 9, 40, 146204, 18, 9964, 41, 3022, 145681, 7]
+    base_learners = [DecisionTreeClassifier, DecisionStump]
+    methods = ["ndea", "conda"]
+    experiment_configurations = [(method, task_id, fold_id, base_learner) for method in methods for task_id in tasks for fold_id in range(10) for base_learner in base_learners]
+    
+    experiment_id = 360#int(sys.argv[1]) ÄNDERN 
+    if(experiment_id < 0 or experiment_id > len(experiment_configurations)-1):
+        raise ValueError("Illegal experiment ID")
+    
+    
+    single_experiment(*experiment_configurations[experiment_id], experiment_id)
+    
 
-experiment_configurations = [(method, task_id, fold_id, base_learner) for method in ["ndea", "conda"] for task_id in tasks for fold_id in range(10) for base_learner in base_learners]
 
-experiment_id = int(sys.argv[1])
-if(experiment_id < 0 or experiment_id > len(experiment_configurations)-1):
-    raise ValueError("Illegal experiment ID")
+def test():
+    tasks = [7, 9, 40, 146204, 18, 9964, 41, 3022, 145681, 2]
+    base_learners = [DecisionTreeClassifier, DecisionStump]
+    methods = ["ndea", "conda"]
+    experiment_configurations = [(method, task_id, fold_id, base_learner) for method in methods for task_id in tasks for fold_id in range(10) for base_learner in base_learners]
+    
+    for experiment_id in range(len(experiment_configurations)):
+        print(experiment_configurations[experiment_id])
+        single_experiment(*experiment_configurations[experiment_id], experiment_id)
+    
 
+main()
 
-single_experiment(*experiment_configurations[experiment_id], experiment_id)
 
 #print(len(experiment_configurations))
 
