@@ -1,0 +1,1 @@
+experiment id: 12, method: ndea, base_learner: Decision Tree task: 40, fold: 0, accuracy: 0.5, train_accuracy: 0.75, ensemble_size: 1, duration: 4.955721139907837, other_results = ['top nd individuals per generation: [0.75, 0.75]']

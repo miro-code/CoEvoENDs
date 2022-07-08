@@ -17,6 +17,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 
 import time, openml
+from pathlib import Path
 
 #unseriös
 from sklearn.utils._testing import ignore_warnings
@@ -29,7 +30,7 @@ def conda(X, y, base_learner_class):
     
     N_POP_ND = 16
     N_POP_ENS = 20
-    N_GEN = 200
+    N_GEN = 200 #  200
     CX_PB_ND, MUT_PB_ND = 1, 1
     MUTATE_ETA_ND = 30
     CX_PB_ENS, MUT_PB_ENS = 0.7, 1
@@ -40,6 +41,7 @@ def conda(X, y, base_learner_class):
     N_ENS_ASSIGNING_SUPPORT = N_POP_ENS
     
     EXPECTED_INIT_ENSEMBLE_SIZE = 20
+    MAX_ENS_SIZE = 40
     N_TIMES_MORE_ENS_GENS = 5
     RESET_INTERVAL = 5 
     TIMEOUT = 420*10*2
@@ -129,7 +131,7 @@ def conda(X, y, base_learner_class):
             i = random.randint(0, len(individual) - 1)
             #todo: fitness dependent selection
             individual.pop(i)
-        if(len(individual) < 40 and random.random() < MUT_APPEND_PB_ENS):
+        if(len(individual) < MAX_ENS_SIZE and random.random() < MUT_APPEND_PB_ENS):
             new_nd = toolbox.join_ens_tournament(nd_population, 1)[0] #tournSel retourns list of selected individuals
             individual.insert(random.randint(0, len(individual)), new_nd)
         if(random.random() < MUT_ALTER_PB_ENS):
@@ -225,9 +227,10 @@ def conda(X, y, base_learner_class):
     toolbox.evaluate_population(toolbox.evaluate_nd, nd_population)
     toolbox.evaluate_population(toolbox.evaluate_ens, ens_population)
 
-    top_ens_individual = None
     start_time = time.time()
-    
+    top_ens_individual_age = 0
+    top_ens_individuals = []
+    top_nd_individuals = []
     
     for g in range(N_GEN):
         
@@ -279,15 +282,20 @@ def conda(X, y, base_learner_class):
         toolbox.count_nd_support(ens_population, nd_population)
         toolbox.evaluate_population(toolbox.evaluate_nd_support, nd_population)
 
+        top_ens_individual = sorted(ens_population, key=lambda ind: ind.fitness.values[0])[0]
+        top_nd_individual = sorted(nd_population, key=lambda ind: ind.fitness.values[0])[0]
+        top_nd_individuals.append(top_nd_individual)
+        top_ens_individuals.append(top_ens_individual)
+
+
         if(time.time() - start_time > TIMEOUT):
             print("Evolutionary run timed out after {g+1} generations")
             generation_end_time = time.time()
             print(f"generation took {generation_end_time-generation_start_time}s")
             break
         
-        if(top_ens_individual != ens_population[0]):
+        if(len(top_ens_individuals) > 1 and top_ens_individuals[-2] != top_ens_individual):
             top_ens_individual_age = 0
-            top_ens_individual = nd_population[0]
         else:
             top_ens_individual_age += 1
             
@@ -297,46 +305,23 @@ def conda(X, y, base_learner_class):
         
         generation_end_time = time.time()
 
-        
+
     del creator.ND_Individual
     del creator.ND_Fitness
     del creator.Ens_Individual
     del creator.Ens_Fitness
 
         
-    return nd_population, ens_population
+    return nd_population, ens_population, top_nd_individuals, top_ens_individuals
         
 
-def display_population(pop):
-    print(f" number of individuals: {len(pop)} \n")
-    
-    distinct_pop = []
-    for i in range(len(pop)):
-        unseen = True
-        for j in range(i):
-            if(pop[i] == pop[j]):
-                unseen = False
-        if(unseen):
-            distinct_pop.append(pop[i])
-    
-    print(f" number of distinct individuals: {len(distinct_pop)} \n")
-    print(f" distinct individuals: {distinct_pop} \n")
-    print(f"fitness: {[ind.fitness.values for ind in distinct_pop]} \n")
-    print(f"generations: {[ind.gen for ind in pop]} \n")
-    
-    try:
-        if(isinstance(pop[0], creator.Ens_Individual)):
-            print(f"Ensemble sizes: {[len(ind) for ind in pop]}")
-    except IndexError:
-        print("Empy population exception")
-        
 def simple_ndea(X, y, base_learner_class):
     
     N_VALID_SPLITS = 5
     VALID_SIZE = 0.1
     
     N_POP_ND = 16
-    N_GEN = 1 #CHANGE
+    N_GEN = 200 #
     CX_PB_ND, MUT_PB_ND = 1, 1
     MUTATE_ETA_ND = 30
     
@@ -410,7 +395,9 @@ def simple_ndea(X, y, base_learner_class):
     start_time = time.time()
     nd_population = toolbox.nd_population(N_POP_ND)
     toolbox.evaluate_population(toolbox.evaluate_nd, nd_population)
-    top_nd_individual = None
+    top_nd_individuals = []
+    top_nd_individual_age = 0
+
     for g in range(N_GEN):
         
         #ND EVOLUTIONARY LOOP
@@ -437,7 +424,8 @@ def simple_ndea(X, y, base_learner_class):
                     child.gen = g + 1
                     child.fitness.values = toolbox.evaluate_nd(child)
         nd_population[:] = toolbox.select(nd_population + nd_offspring, N_POP_ND)
-
+        top_nd_individuals.append(nd_population[0])
+        
         #stopping criteria
         if(time.time() - start_time > 420):
             print("Evolutionary run timed out after {g+1} generations")
@@ -445,9 +433,8 @@ def simple_ndea(X, y, base_learner_class):
             print(f"generation took {generation_end_time-generation_start_time}s")
             break
         
-        if(top_nd_individual != nd_population[0]):
+        if(len(top_nd_individuals) > 1 and top_nd_individuals[-2] != top_nd_individuals[-1]):
             top_nd_individual_age = 0
-            top_nd_individual = nd_population[0]
         else:
             top_nd_individual_age += 1
             
@@ -460,14 +447,39 @@ def simple_ndea(X, y, base_learner_class):
         
     del creator.ND_Individual
     del creator.ND_Fitness
-    return nd_population
+    return nd_population, top_nd_individuals
 
+
+def display_population(pop):
+    print(f" number of individuals: {len(pop)} \n")
+    
+    distinct_pop = []
+    for i in range(len(pop)):
+        unseen = True
+        for j in range(i):
+            if(pop[i] == pop[j]):
+                unseen = False
+        if(unseen):
+            distinct_pop.append(pop[i])
+    
+    print(f" number of distinct individuals: {len(distinct_pop)} \n")
+    print(f" distinct individuals: {distinct_pop} \n")
+    print(f"fitness: {[ind.fitness.values for ind in distinct_pop]} \n")
+    print(f"generations: {[ind.gen for ind in pop]} \n")
+    
+    try:
+        if(isinstance(pop[0], creator.Ens_Individual)):
+            print(f"Ensemble sizes: {[len(ind) for ind in pop]}")
+    except IndexError:
+        print("Empy population exception")
+        
 
 def log_result(experiment_id, method, base_learner, task, fold, accuracy, train_accuracy, ensemble_size, duration, other_results = None):
     log_message = "experiment id: {}, method: {}, base_learner: {} task: {}, fold: {}, accuracy: {}, train_accuracy: {}, ensemble_size: {}, duration: {}, other_results = {}\n".format(experiment_id, method, base_learner, task, fold, accuracy, train_accuracy, ensemble_size, duration, other_results)
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, 'results\\results.txt')
-    
+    results_dirname = os.path.join(dirname, 'results\\' + str(experiment_id))
+    Path(results_dirname).mkdir(parents=True, exist_ok=True)
+    filename = os.path.join(results_dirname, 'results.txt')
     with open(filename, "a") as f:
         f.write(log_message)
 
@@ -496,30 +508,37 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
     X_train, y_train, X_test, y_test = X[train_indices], y[train_indices], X[test_indices], y[test_indices]
     other_results = []
     if(method == "ndea"):
-        ENSEMBLE_SIZE = 1 # CHANGE TO 10 DONT FORGET
+        ENSEMBLE_SIZE = 10 #  TO 10 DONT FORGET
         top_ensemble = Ensemble()
         for j in range(ENSEMBLE_SIZE):
-            top_individual=simple_ndea(X_train, y_train, base_learner)[0]
+            final_population, top_nd_individuals_over_time =simple_ndea(X_train, y_train, base_learner)
+            top_individual = top_nd_individuals_over_time[-1]
             top_individual_blueprint = top_individual.tree
             train_accuracy=top_individual.fitness.values[0]
             new_nd = NestedDichotomie(base_learner)
             new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
             top_ensemble.append(new_nd)
+            top_nd_individuals_fitness_over_time = [nd.fitness.values[0] for nd in top_nd_individuals_over_time]
+            other_results.append("top nd individuals per generation: " + str(top_nd_individuals_fitness_over_time))
     elif(method == "conda"):
-        final_population = conda(X_train, y_train, base_learner)[1]
-        top_ens_individual = final_population[0]
+        final_nd_population, final_ens_population, top_nd_individuals_over_time, top_ens_individuals_over_time = conda(X_train, y_train, base_learner)
+        top_ens_individual = top_ens_individuals_over_time[-1]
         train_accuracy = top_ens_individual.fitness.values[0]
         top_ensemble = Ensemble([nd_genotype.phenotype for nd_genotype in top_ens_individual])
         top_ensemble.refit(X_train,y_train)
 
-        for i in range(1, len(final_population)):
-            ens_individual = final_population[i]
+        for i in range(len(final_ens_population)):
+            ens_individual = final_ens_population[i]
             train_accuracy = ens_individual.fitness.values[0]
             ensemble = Ensemble([nd_genotype.phenotype for nd_genotype in ens_individual])
             ensemble.refit(X_train,y_train)
             ensemble_predictions = ensemble.predict(X_test)
             ensemble_accuracy = accuracy_score(y_test, ensemble_predictions)
             other_results.append(("size: "+ str(len(ensemble)), "test accuracy:" +str(ensemble_accuracy), "train accuracy: " + str(train_accuracy)))
+        top_nd_individuals_fitness_over_time = [nd.fitness.values[0] for nd in top_nd_individuals_over_time]        
+        top_ens_individuals_fitness_over_time = [(ens.fitness.values[0],ens.fitness.values[1]) for ens in top_ens_individuals_over_time]
+        other_results.append("top nd individuals per generation: " + str(top_nd_individuals_fitness_over_time))
+        other_results.append("top ens individuals per generation: " + str(top_ens_individuals_fitness_over_time))
     else:
         raise ValueError("Method can be 'ndea' or 'conda'")
     predictions = top_ensemble.predict(X_test)
@@ -556,79 +575,77 @@ def main():
 
 def test():
     tasks = [7, 9, 40, 146204, 18, 9964, 41, 3022, 145681, 2]
-    base_learners = [DecisionTreeClassifier, DecisionStump]
-    methods = ["ndea", "conda"]
-    experiment_configurations = [(method, task_id, fold_id, base_learner) for method in methods for task_id in tasks for fold_id in range(10) for base_learner in base_learners]
+    base_learners = [DecisionTreeClassifier, ] #DecisionStump
+    methods = ["conda", "ndea"]
+    experiment_configurations = [(method, task_id, fold_id, base_learner) for method in methods for task_id in tasks for fold_id in range(1) for base_learner in base_learners]
     
     for experiment_id in range(len(experiment_configurations)):
         print(experiment_configurations[experiment_id])
         single_experiment(*experiment_configurations[experiment_id], experiment_id)
     
 
-main()
+main() #CHANGE
 
 
 #print(len(experiment_configurations))
 
-# =============================================================================
-# 
-# 
-# #single run times
-# start_time = time.time()
-# task_id = 6
-# task = openml.tasks.get_task(task_id)
-# dataset = openml.datasets.get_dataset(task.dataset_id)
-# X, y, categorical_indicator, attribute_names = dataset.get_data(target=dataset.default_target_attribute, dataset_format="dataframe")
-# #preprocessing
-# categorical_features = list(X.columns[categorical_indicator])
-# numeric_features = list(X.columns[~np.array(categorical_indicator)])
-# numeric_transformer = SimpleImputer(strategy="median")
-# categorical_transformer = OneHotEncoder(sparse = False)
-# preprocessor = ColumnTransformer(
-#     transformers=[
-#         ("num", numeric_transformer, numeric_features),
-#         ("cat", categorical_transformer, categorical_features),
-#     ]
-# )
-# X = preprocessor.fit_transform(X)
-# 
-# train_indices, test_indices = task.get_train_test_split_indices(repeat=0, fold=0, sample=0)
-# X_train, y_train, X_test, y_test = X[train_indices], y[train_indices], X[test_indices], y[test_indices]
-# top_individual_blueprint = simple_ndea(X_train, y_train, LogisticRegression)[0].tree
-# new_nd = NestedDichotomie(LogisticRegression)
-# new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
-# prediction = new_nd.predict(X_test)
-# accuracy = accuracy_score(y_test, prediction)
-# end_time = time.time()
-# log_result("test", task_id, accuracy, end_time - start_time, [new_nd])
-# 
-# 
-# 
-# from sklearn.tree import DecisionTreeClassifier
-# 
-# 
-# dt = DecisionTreeClassifier()
-# start = time.time()
-# dt.fit(X,y)
-# end = time.time()
-# print(end-start)
-# start = time.time()
-# dt.fit(X,y)
-# end = time.time()
-# print(end-start)
-# print(X.shape)
-# 
-# new_nd = NestedDichotomie(LogisticRegression)
-# fitstart = time.time()
-# new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
-# fitend = time.time()
-# prediction = new_nd.predict(X_test)
-# predend = time.time()
-# accuracy = accuracy_score(y_test, prediction)
-# print(f"fitting took {fitend - fitstart}s and prediction took {predend - fitend}s")
-# 
-# 
-# 
-# 
-# 
-# =============================================================================
+
+""" 
+#single run times
+start_time = time.time()
+task_id = 6
+task = openml.tasks.get_task(task_id)
+dataset = openml.datasets.get_dataset(task.dataset_id)
+X, y, categorical_indicator, attribute_names = dataset.get_data(target=dataset.default_target_attribute, dataset_format="dataframe")
+#preprocessing
+categorical_features = list(X.columns[categorical_indicator])
+numeric_features = list(X.columns[~np.array(categorical_indicator)])
+numeric_transformer = SimpleImputer(strategy="median")
+categorical_transformer = OneHotEncoder(sparse = False)
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("num", numeric_transformer, numeric_features),
+        ("cat", categorical_transformer, categorical_features),
+    ]
+)
+X = preprocessor.fit_transform(X)
+
+train_indices, test_indices = task.get_train_test_split_indices(repeat=0, fold=0, sample=0)
+X_train, y_train, X_test, y_test = X[train_indices], y[train_indices], X[test_indices], y[test_indices]
+top_individual_blueprint = simple_ndea(X_train, y_train, LogisticRegression)[0].tree
+new_nd = NestedDichotomie(LogisticRegression)
+new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
+prediction = new_nd.predict(X_test)
+accuracy = accuracy_score(y_test, prediction)
+end_time = time.time()
+log_result("test", task_id, accuracy, end_time - start_time, [new_nd])
+
+
+
+from sklearn.tree import DecisionTreeClassifier
+
+
+dt = DecisionTreeClassifier()
+start = time.time()
+dt.fit(X,y)
+end = time.time()
+print(end-start)
+start = time.time()
+dt.fit(X,y)
+end = time.time()
+print(end-start)
+print(X.shape)
+
+new_nd = NestedDichotomie(LogisticRegression)
+fitstart = time.time()
+new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
+fitend = time.time()
+prediction = new_nd.predict(X_test)
+predend = time.time()
+accuracy = accuracy_score(y_test, prediction)
+print(f"fitting took {fitend - fitstart}s and prediction took {predend - fitend}s")
+
+
+ """
+
+
