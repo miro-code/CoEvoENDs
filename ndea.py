@@ -41,7 +41,7 @@ def conda(X, y, base_learner_class):
     N_ENS_ASSIGNING_SUPPORT = N_POP_ENS
     
     EXPECTED_INIT_ENSEMBLE_SIZE = 20
-    MAX_ENS_SIZE = 40
+    MAX_ENS_SIZE = 10
     N_TIMES_MORE_ENS_GENS = 5
     RESET_INTERVAL = 5 
     TIMEOUT = 420*10*2
