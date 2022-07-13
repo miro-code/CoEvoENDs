@@ -30,7 +30,7 @@ def conda(X, y, base_learner_class):
     
     N_POP_ND = 16
     N_POP_ENS = 20
-    N_GEN = 200 #  200
+    N_GEN = 200 # CHANGE 200
     CX_PB_ND, MUT_PB_ND = 1, 1
     MUTATE_ETA_ND = 30
     CX_PB_ENS, MUT_PB_ENS = 0.7, 1
@@ -67,7 +67,7 @@ def conda(X, y, base_learner_class):
         result = []
         for i in range(N_POP_ENS):
             result.append(creator.Ens_Individual([random.choice(nds)]))
-            while(random.random() < p_add):
+            while(random.random() < p_add and len(result[i] < MAX_ENS_SIZE)):
                 result[i].append(random.choice(nds))
         return result
     
@@ -564,7 +564,7 @@ def main():
     methods = ["ndea", "conda"]
     experiment_configurations = [(method, task_id, fold_id, base_learner) for method in methods for task_id in tasks for fold_id in range(10) for base_learner in base_learners]
     
-    experiment_id = 360#int(sys.argv[1]) ÄNDERN 
+    experiment_id = int(sys.argv[1]) 
     if(experiment_id < 0 or experiment_id > len(experiment_configurations)-1):
         raise ValueError("Illegal experiment ID")
     
