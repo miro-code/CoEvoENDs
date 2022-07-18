@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from json import tool
 import random, util, os, sys
 import numpy as np
 from deap import base, creator, tools
@@ -23,6 +24,28 @@ from pathlib import Path
 from sklearn.utils._testing import ignore_warnings
 from sklearn.exceptions import ConvergenceWarning
 
+#takes output of nsga-II and seperates first rank from others
+#then orders first rank by fitness
+#only works for positive fitness values
+def order_first_rank(individuals):
+    if(not individuals):
+        raise ValueError("No individuals in list")
+    first_rank = [individuals[0]]
+    pointer = 1
+    while(pointer < len(individuals)):
+        current_ind = individuals[pointer]
+        position = 0
+        while(position < len(first_rank) and first_rank[position].fitness.values[0] * first_rank[position].fitness.weights[0]  >= current_ind.fitness.values[0] * current_ind.fitness.weights[0]):
+            position += 1
+        if(position > 0 and first_rank[position -1].fitness.values[1] * first_rank[position -1].fitness.weights[1] >= current_ind.fitness.values[1] * current_ind.fitness.weights[1] and current_ind.fitness != first_rank[position -1].fitness):
+            break
+        first_rank.insert(position, current_ind)
+        pointer += 1
+    other_ranks = individuals[pointer :]
+    return first_rank, other_ranks
+    
+
+
 def conda(X, y, base_learner_class):
     
     N_VALID_SPLITS = 5
@@ -30,7 +53,7 @@ def conda(X, y, base_learner_class):
     
     N_POP_ND = 16
     N_POP_ENS = 20
-    N_GEN = 200 # CHANGE 200
+    N_GEN = 6 # CHANGE 200 #should be multiple of RESET_INTERVAL
     CX_PB_ND, MUT_PB_ND = 1, 1
     MUTATE_ETA_ND = 30
     CX_PB_ENS, MUT_PB_ENS = 0.7, 1
@@ -65,9 +88,9 @@ def conda(X, y, base_learner_class):
         #größe der individuen geometrisch verteilt
         p_add = 1- (1 / EXPECTED_INIT_ENSEMBLE_SIZE)
         result = []
-        for i in range(N_POP_ENS):
+        for i in range(n):
             result.append(creator.Ens_Individual([random.choice(nds)]))
-            while(random.random() < p_add and len(result[i] < MAX_ENS_SIZE)):
+            while(random.random() < p_add and len(result[i]) < MAX_ENS_SIZE):
                 result[i].append(random.choice(nds))
         return result
     
@@ -129,14 +152,13 @@ def conda(X, y, base_learner_class):
     def mutate_ens(individual, nd_population):
         if(len(individual) > 1 and random.random() < MUT_REDUCE_PB_ENS):
             i = random.randint(0, len(individual) - 1)
-            #todo: fitness dependent selection
+            #alternative implementation would be fitness dependent selection
             individual.pop(i)
         if(len(individual) < MAX_ENS_SIZE and random.random() < MUT_APPEND_PB_ENS):
             new_nd = toolbox.join_ens_tournament(nd_population, 1)[0] #tournSel retourns list of selected individuals
             individual.insert(random.randint(0, len(individual)), new_nd)
         if(random.random() < MUT_ALTER_PB_ENS):
             i = random.randint(0, len(individual) - 1)
-            #todo: fitness dependent selection
             new_nd = toolbox.join_ens_tournament(nd_population, 1)[0]
             individual[i] = new_nd
         
@@ -195,7 +217,7 @@ def conda(X, y, base_learner_class):
         reset_support(nd_population)
         for i in range(N_ENS_ASSIGNING_SUPPORT):
             assign_support_single(ens_population[i])
-    
+
     nd_ind_size = int((n_classes * (n_classes - 1)) / 2)
     gene_mut_prob = 1/nd_ind_size
 
@@ -228,7 +250,7 @@ def conda(X, y, base_learner_class):
     toolbox.evaluate_population(toolbox.evaluate_ens, ens_population)
 
     start_time = time.time()
-    top_ens_individual_age = 0
+    top_ens_individual_age = 0 
     top_ens_individuals = []
     top_nd_individuals = []
     
@@ -241,9 +263,12 @@ def conda(X, y, base_learner_class):
             nd_population[1:] = toolbox.nd_population(N_POP_ND-1)
             toolbox.evaluate_population(toolbox.evaluate_nd, nd_population[1:])
             
-            n_elite = N_POP_ENS // 2
-            ens_population[n_elite:] = toolbox.ens_population(N_POP_ENS - n_elite, nd_population)
-            toolbox.evaluate_population(toolbox.evaluate_ens, ens_population[n_elite:])
+            ens_population_elite, _ = order_first_rank(ens_population)
+            ens_population[:] = ens_population_elite + toolbox.ens_population(N_POP_ENS - len(ens_population_elite), nd_population)
+            #test
+            if(len(ens_population) != N_POP_ENS):
+                raise RuntimeError("ENS Population size shouldnt change")
+            toolbox.evaluate_population(toolbox.evaluate_ens, ens_population[len(ens_population_elite):])
             
         
         #ND GENERATION
@@ -262,7 +287,8 @@ def conda(X, y, base_learner_class):
                     child.gen = g + 1
                     child.val_predictions = []
                     child.fitness.values = toolbox.evaluate_nd(child)
-        nd_population[:] = toolbox.select(nd_population+nd_offspring, N_POP_ND)
+        new_elite, rest = order_first_rank(toolbox.select(nd_population+nd_offspring, N_POP_ND))
+        nd_population[:] = new_elite + rest
 
         #ENS LOOP
         for i in range(N_TIMES_MORE_ENS_GENS):
@@ -278,14 +304,24 @@ def conda(X, y, base_learner_class):
                         child.gen = g+1
                         child.val_predictions = []
                         child.fitness.values = toolbox.evaluate_ens(child)
-            ens_population[:] = toolbox.select(ens_population+ens_offspring, N_POP_ENS)
+            new_elite, rest = order_first_rank(toolbox.select(ens_population+ens_offspring, N_POP_ENS))
+            ens_population[:] = new_elite + rest
         toolbox.count_nd_support(ens_population, nd_population)
         toolbox.evaluate_population(toolbox.evaluate_nd_support, nd_population)
+        new_elite, rest = order_first_rank(toolbox.select(nd_population, N_POP_ND))
+        nd_population[:] = new_elite + rest
 
-        top_ens_individual = sorted(ens_population, key=lambda ind: ind.fitness.values[0])[0]
-        top_nd_individual = sorted(nd_population, key=lambda ind: ind.fitness.values[0])[0]
-        top_nd_individuals.append(top_nd_individual)
-        top_ens_individuals.append(top_ens_individual)
+        #tests
+        top_ens_individual = sorted(ens_population, key=lambda ind: ind.fitness.values[0])[-1]
+        top_nd_individual = sorted(nd_population, key=lambda ind: ind.fitness.values[0])[-1]
+        if(top_ens_individual.fitness > ens_population[0].fitness):
+            raise RuntimeError("Ens populatio sorted wrong")
+        if(top_nd_individual.fitness > nd_population[0].fitness):
+            raise RuntimeError("ND populatio sorted wrong")
+
+        top_nd_individuals.append(nd_population[0])
+        top_ens_individuals.append(ens_population[0])
+
 
 
         if(time.time() - start_time > TIMEOUT):
@@ -321,7 +357,7 @@ def simple_ndea(X, y, base_learner_class):
     VALID_SIZE = 0.1
     
     N_POP_ND = 16
-    N_GEN = 200 #
+    N_GEN = 6 #CHANGE 200
     CX_PB_ND, MUT_PB_ND = 1, 1
     MUTATE_ETA_ND = 30
     
@@ -463,7 +499,7 @@ def display_population(pop):
             distinct_pop.append(pop[i])
     
     print(f" number of distinct individuals: {len(distinct_pop)} \n")
-    print(f" distinct individuals: {distinct_pop} \n")
+    #print(f" distinct individuals: {distinct_pop} \n")
     print(f"fitness: {[ind.fitness.values for ind in distinct_pop]} \n")
     print(f"generations: {[ind.gen for ind in pop]} \n")
     
@@ -529,13 +565,13 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
 
         for i in range(len(final_ens_population)):
             ens_individual = final_ens_population[i]
-            train_accuracy = ens_individual.fitness.values[0]
+            ens_train_accuracy = ens_individual.fitness.values[0]
             ensemble = Ensemble([nd_genotype.phenotype for nd_genotype in ens_individual])
             ensemble.refit(X_train,y_train)
             ensemble_predictions = ensemble.predict(X_test)
             ensemble_accuracy = accuracy_score(y_test, ensemble_predictions)
-            other_results.append(("size: "+ str(len(ensemble)), "test accuracy:" +str(ensemble_accuracy), "train accuracy: " + str(train_accuracy)))
-        top_nd_individuals_fitness_over_time = [nd.fitness.values[0] for nd in top_nd_individuals_over_time]        
+            other_results.append(("size: "+ str(len(ensemble)), "test accuracy:" +str(ensemble_accuracy), "train accuracy: " + str(ens_train_accuracy)))
+        top_nd_individuals_fitness_over_time = [(nd.fitness.values[0], nd.fitness.values[1]) for nd in top_nd_individuals_over_time]        
         top_ens_individuals_fitness_over_time = [(ens.fitness.values[0],ens.fitness.values[1]) for ens in top_ens_individuals_over_time]
         other_results.append("top nd individuals per generation: " + str(top_nd_individuals_fitness_over_time))
         other_results.append("top ens individuals per generation: " + str(top_ens_individuals_fitness_over_time))
@@ -573,21 +609,24 @@ def main():
     
 
 
-def test():
-    tasks = [7, 9, 40, 146204, 18, 9964, 41, 3022, 145681, 2]
-    base_learners = [DecisionTreeClassifier, ] #DecisionStump
-    methods = ["conda", "ndea"]
-    experiment_configurations = [(method, task_id, fold_id, base_learner) for method in methods for task_id in tasks for fold_id in range(1) for base_learner in base_learners]
+def test(id = None):
+    tasks = [9, 40, 146204, 18, 9964, 41, 3022, 145681, 2, 7]
+    base_learners = [DecisionTreeClassifier, DecisionStump] 
+    methods = ["ndea", "conda"]
+    experiment_configurations = [(method, task_id, fold_id, base_learner) for method in methods for task_id in tasks for fold_id in range(10) for base_learner in base_learners]
     
-    for experiment_id in range(len(experiment_configurations)):
-        print(experiment_configurations[experiment_id])
-        single_experiment(*experiment_configurations[experiment_id], experiment_id)
-    
+    if(id is not None):
+        print(experiment_configurations[id])
+        single_experiment(*experiment_configurations[id], id)
+    else:
+        for experiment_id in range(len(experiment_configurations)):
+            print(experiment_configurations[experiment_id])
+            single_experiment(*experiment_configurations[experiment_id], experiment_id)
+        
+test(399)
+#main() Change 
 
-main() #CHANGE
 
-
-#print(len(experiment_configurations))
 
 
 """ 
