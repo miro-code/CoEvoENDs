@@ -53,7 +53,7 @@ def conda(X, y, base_learner_class):
     
     N_POP_ND = 16
     N_POP_ENS = 20
-    N_GEN = 6 # CHANGE 200 #should be multiple of RESET_INTERVAL
+    N_GEN = 200 # 200 #should be multiple of RESET_INTERVAL
     CX_PB_ND, MUT_PB_ND = 1, 1
     MUTATE_ETA_ND = 30
     CX_PB_ENS, MUT_PB_ENS = 0.7, 1
@@ -357,7 +357,7 @@ def simple_ndea(X, y, base_learner_class):
     VALID_SIZE = 0.1
     
     N_POP_ND = 16
-    N_GEN = 6 #CHANGE 200
+    N_GEN = 200 # 200
     CX_PB_ND, MUT_PB_ND = 1, 1
     MUTATE_ETA_ND = 30
     
@@ -623,9 +623,8 @@ def test(id = None):
             print(experiment_configurations[experiment_id])
             single_experiment(*experiment_configurations[experiment_id], experiment_id)
         
-test(399)
-#main() Change 
-
+#test(399)
+main() 
 
 
 
