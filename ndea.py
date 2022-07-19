@@ -67,7 +67,7 @@ def conda(X, y, base_learner_class):
     MAX_ENS_SIZE = 10
     N_TIMES_MORE_ENS_GENS = 5
     RESET_INTERVAL = 5 
-    TIMEOUT = 420*10*2
+    TIMEOUT = 420*5
     classes = unique_labels(y)
     n_classes = len(classes)
     X_trains, X_valids, y_trains, y_valids = [], [], [], []
