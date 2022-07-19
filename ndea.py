@@ -54,7 +54,7 @@ def conda(X, y, base_learner_class):
     N_POP_ND = 16
     N_POP_ENS = 20
     N_GEN = 200 # 200 #should be multiple of RESET_INTERVAL
-    CX_PB_ND, MUT_PB_ND = 1, 1
+    CX_PB_ND, MUT_PB_ND = 0.9, 1
     MUTATE_ETA_ND = 30
     CX_PB_ENS, MUT_PB_ENS = 0.7, 1
     
@@ -358,7 +358,7 @@ def simple_ndea(X, y, base_learner_class):
     
     N_POP_ND = 16
     N_GEN = 200 # 200
-    CX_PB_ND, MUT_PB_ND = 1, 1
+    CX_PB_ND, MUT_PB_ND = 0.9, 1
     MUTATE_ETA_ND = 30
     
     OFFSPRING_TOURNAMENT_SIZE = 2
