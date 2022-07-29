@@ -1,6 +1,8 @@
 from json import tool
 import random, ndea
 from deap import tools, creator, base
+from nested_dichotomies import NestedDichotomie
+from genotype import DistanceMatrix
 
 def test_init_ens_population_concept(n):
     p_add = 1- (1 / n)
@@ -58,8 +60,16 @@ def test_single():
         ind.fitness.values = toolbox.evaluate(ind)
     print(population)
 
-#test_single()
-test_ea()
+
+def random_tree(classes):
+    n_classes = len(classes)
+    nd_ind_size = int((n_classes * (n_classes - 1)) / 2)
+    individual = [random.random() for i in range(nd_ind_size)]
+    dist_matr = DistanceMatrix(classes, individual)
+    tree = dist_matr.build_tree()
+    return tree
+
+
 
 
 

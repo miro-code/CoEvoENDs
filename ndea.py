@@ -7,6 +7,7 @@ from deap import base, creator, tools
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.utils.multiclass import unique_labels
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
@@ -72,12 +73,24 @@ def conda(X, y, base_learner_class):
     n_classes = len(classes)
     X_trains, X_valids, y_trains, y_valids = [], [], [], []
 
-    for i in range(N_VALID_SPLITS):
-        X_train, X_valid , y_train, y_valid = train_test_split(X, y, test_size = VALID_SIZE)
-        X_trains.append(X_train)
-        X_valids.append(X_valid)
-        y_trains.append(y_train)
-        y_valids.append(y_valid)
+    sss = StratifiedShuffleSplit(n_splits=N_VALID_SPLITS, test_size=VALID_SIZE)
+    try:
+        for train_index, test_index in sss.split(X, y):
+            X_train, X_test = X[train_index], X[test_index]
+            y_train, y_test = y[train_index], y[test_index]
+            X_trains.append(X_train)
+            X_valids.append(X_valid)
+            y_trains.append(y_train)
+            y_valids.append(y_valid)
+
+    except:
+        X_trains, X_valids, y_trains, y_valids = [], [], [], []
+        for i in range(N_VALID_SPLITS):
+            X_train, X_valid , y_train, y_valid = train_test_split(X, y, test_size = VALID_SIZE)
+            X_trains.append(X_train)
+            X_valids.append(X_valid)
+            y_trains.append(y_train)
+            y_valids.append(y_valid)
     
     creator.create("ND_Fitness", base.Fitness, weights = (1.0, 1.0))
     creator.create("ND_Individual", list, fitness = creator.ND_Fitness, gen = 0, val_predictions = list, support = 0)
@@ -368,6 +381,26 @@ def simple_ndea(X, y, base_learner_class):
     creator.create("ND_Individual", list, fitness = creator.ND_Fitness, gen = 0)
     
     def evaluate_nd(individual):
+
+        X_trains, X_valids, y_trains, y_valids = [], [], [], []
+        sss = StratifiedShuffleSplit(n_splits=N_VALID_SPLITS, test_size=VALID_SIZE)
+        try:
+            for train_index, test_index in sss.split(X, y):
+                X_train, X_test = X[train_index], X[test_index]
+                y_train, y_test = y[train_index], y[test_index]
+                X_trains.append(X_train)
+                X_valids.append(X_valid)
+                y_trains.append(y_train)
+                y_valids.append(y_valid)
+
+        except:
+            X_trains, X_valids, y_trains, y_valids = [], [], [], []
+            for i in range(N_VALID_SPLITS):
+                X_train, X_valid , y_train, y_valid = train_test_split(X, y, test_size = VALID_SIZE)
+                X_trains.append(X_train)
+                X_valids.append(X_valid)
+                y_trains.append(y_train)
+                y_valids.append(y_valid) 
         dist_matr = DistanceMatrix(classes, individual)
         tree = dist_matr.build_tree()
         nd = NestedDichotomie(base_learner_class)
@@ -375,7 +408,7 @@ def simple_ndea(X, y, base_learner_class):
         
         accuracies = []
         for i in range(N_VALID_SPLITS):
-            X_train, X_valid , y_train, y_valid = train_test_split(X, y, test_size = VALID_SIZE)
+            X_train, X_valid , y_train, y_valid = X_trains[i], X_valids[i], y_trains[i], y_valids[i]
             nd = nd.fit(X_train, y_train, tree)
             valid_pred = nd.predict(X_valid)
             valid_accuracy = accuracy_score(y_valid, valid_pred)
@@ -606,7 +639,7 @@ def main():
 
 
 def test(id = None):
-    tasks = [9, 40, 146204, 18, 9964, 41, 3022, 145681, 2, 7]
+    tasks = [2, 9, 40, 146204, 18, 9964, 41, 3022, 145681, 7]
     base_learners = [DecisionTreeClassifier, DecisionStump] 
     methods = ["ndea", "conda"]
     experiment_configurations = [(method, task_id, fold_id, base_learner) for method in methods for task_id in tasks for fold_id in range(10) for base_learner in base_learners]
