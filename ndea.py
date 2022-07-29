@@ -53,7 +53,7 @@ def conda(X, y, base_learner_class):
     
     N_POP_ND = 16
     N_POP_ENS = 20
-    N_GEN = 200 # 200 #should be multiple of RESET_INTERVAL
+    N_GEN = 200 #  200 #should be multiple of RESET_INTERVAL
     CX_PB_ND, MUT_PB_ND = 0.9, 1
     MUTATE_ETA_ND = 30
     CX_PB_ENS, MUT_PB_ENS = 0.7, 1
@@ -135,6 +135,9 @@ def conda(X, y, base_learner_class):
             pred = np.apply_along_axis(util.max_bincount_random_tiebreak, 0, predictions)
             scores.append(accuracy_score(y_valids[i], pred))
             individual.val_predictions.append(pred)
+        scores.sort()
+        scores.pop(-1)
+        scores.pop(0)
         accuracy = sum(scores)/len(scores)
         return accuracy, len(individual)
     
@@ -311,13 +314,6 @@ def conda(X, y, base_learner_class):
         new_elite, rest = order_first_rank(toolbox.select(nd_population, N_POP_ND))
         nd_population[:] = new_elite + rest
 
-        #tests
-        top_ens_individual = sorted(ens_population, key=lambda ind: ind.fitness.values[0])[-1]
-        top_nd_individual = sorted(nd_population, key=lambda ind: ind.fitness.values[0])[-1]
-        if(top_ens_individual.fitness > ens_population[0].fitness):
-            raise RuntimeError("Ens populatio sorted wrong")
-        if(top_nd_individual.fitness > nd_population[0].fitness):
-            raise RuntimeError("ND populatio sorted wrong")
 
         top_nd_individuals.append(nd_population[0])
         top_ens_individuals.append(ens_population[0])
@@ -330,7 +326,7 @@ def conda(X, y, base_learner_class):
             print(f"generation took {generation_end_time-generation_start_time}s")
             break
         
-        if(len(top_ens_individuals) > 1 and top_ens_individuals[-2] != top_ens_individual):
+        if(len(top_ens_individuals) > 1 and top_ens_individuals[-2] != top_ens_individuals[-1]):
             top_ens_individual_age = 0
         else:
             top_ens_individual_age += 1
@@ -357,7 +353,7 @@ def simple_ndea(X, y, base_learner_class):
     VALID_SIZE = 0.1
     
     N_POP_ND = 16
-    N_GEN = 200 # 200
+    N_GEN = 200 #  200
     CX_PB_ND, MUT_PB_ND = 0.9, 1
     MUTATE_ETA_ND = 30
     
