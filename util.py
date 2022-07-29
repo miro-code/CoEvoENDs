@@ -49,8 +49,9 @@ class Ensemble(list):
     
     def predict(self, X):
         proba = self.predict_proba(X)
-        return np.apply_along_axis(i_max_random_tiebreak, 1, proba)
-    
+        results = np.apply_along_axis(self[0].get_probable_class,1, proba)
+        return results
+
     def refit(self, X, y):
         for nd in self:
             nd.fit(X,y,nd.tree)

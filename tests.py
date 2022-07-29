@@ -1,5 +1,5 @@
 from json import tool
-import random, ndea
+import random
 from deap import tools, creator, base
 from nested_dichotomies import NestedDichotomie
 from genotype import DistanceMatrix
@@ -72,4 +72,67 @@ def random_tree(classes):
 
 
 
+#test single task in console
+"""
+import openml
+task_id = 7
+task = openml.tasks.get_task(task_id)
+dataset = openml.datasets.get_dataset(task.dataset_id)
+X, y, categorical_indicator, attribute_names = dataset.get_data(target=dataset.default_target_attribute, dataset_format="dataframe")
 
+
+
+from json import tool
+import random, util, os, sys
+import numpy as np
+from deap import base, creator, tools
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.utils.multiclass import unique_labels
+from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+
+from nested_dichotomies import NestedDichotomie
+from genotype import DistanceMatrix
+from util import BinaryTreeNode, Ensemble, DecisionStump
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+
+import time, openml
+from pathlib import Path
+
+import tests
+
+label_encoder = LabelEncoder()
+y = label_encoder.fit_transform(y)
+categorical_features = list(X.columns[categorical_indicator])
+numeric_features = list(X.columns[~np.array(categorical_indicator)])
+numeric_transformer = SimpleImputer(strategy="median")
+categorical_transformer = OneHotEncoder(sparse = False)
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("num", numeric_transformer, numeric_features),
+        ("cat", categorical_transformer, categorical_features),
+    ]
+)
+X = preprocessor.fit_transform(X)    
+fold_id = 9
+train_indices, test_indices = task.get_train_test_split_indices(repeat=0, fold=fold_id, sample=0)
+X_train, y_train, X_test, y_test = X[train_indices], y[train_indices], X[test_indices], y[test_indices]
+fold_id = 8
+train_indices, test_indices = task.get_train_test_split_indices(repeat=0, fold=fold_id, sample=0)
+X_train8, y_train8, X_test8, y_test8 = X[train_indices], y[train_indices], X[test_indices], y[test_indices]
+
+tree9 = tests.random_tree(unique_labels(y_train))
+nd = NestedDichotomie(DecisionTreeClassifier)
+nd.fit(X_train, y_train, tree9)
+pred = nd.predict(X_test)
+accuracy = accuracy_score(y_test, pred)
+
+ens = Ensemble([nd])
+
+
+"""
