@@ -542,7 +542,7 @@ def display_population(pop):
 def log_result(experiment_id, method, base_learner, task, fold, accuracy, train_accuracy, ensemble_size, duration, other_results = None):
     log_message = "experiment id: {}, method: {}, base_learner: {} task: {}, fold: {}, accuracy: {}, train_accuracy: {}, ensemble_size: {}, duration: {}, other_results = {}\n".format(experiment_id, method, base_learner, task, fold, accuracy, train_accuracy, ensemble_size, duration, other_results)
     dirname = os.path.dirname(__file__)
-    results_dirname = os.path.join(dirname, 'results\\' + str(experiment_id))
+    results_dirname = os.path.join(dirname, 'results/' + str(experiment_id))
     Path(results_dirname).mkdir(parents=True, exist_ok=True)
     filename = os.path.join(results_dirname, 'results.txt')
     with open(filename, "a") as f:
