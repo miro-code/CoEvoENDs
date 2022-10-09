@@ -59,13 +59,12 @@ def conda(X, y, base_learner_class):
     MUTATE_ETA_ND = 30
     CX_PB_ENS, MUT_PB_ENS = 0.7, 1
     
-    MUT_APPEND_PB_ENS, MUT_REDUCE_PB_ENS, MUT_ALTER_PB_ENS = 0.5, 0.1, 0.9
     JOIN_ENS_TOURNAMENT_SIZE = 2
     OFFSPRING_TOURNAMENT_SIZE = 2
     N_ENS_ASSIGNING_SUPPORT = N_POP_ENS
     
     EXPECTED_INIT_ENSEMBLE_SIZE = 64
-    MAX_ENS_SIZE = 10
+    ENS_SIZE = 10
     N_TIMES_MORE_ENS_GENS = 5
     RESET_INTERVAL = 5 
     TIMEOUT = 420*5
@@ -98,14 +97,7 @@ def conda(X, y, base_learner_class):
     creator.create("Ens_Individual", list, fitness = creator.Ens_Fitness, gen = 0, val_predictions = list)
     
     def init_ens_population(n, nds):
-        #größe der individuen geometrisch verteilt
-        p_add = 1- (1 / EXPECTED_INIT_ENSEMBLE_SIZE)
-        result = []
-        for i in range(n):
-            result.append(creator.Ens_Individual([random.choice(nds)]))
-            while(random.random() < p_add and len(result[i]) < MAX_ENS_SIZE):
-                result[i].append(random.choice(nds))
-        return result
+        return [creator.Ens_Individual([random.choice(nds) for j in range(ENS_SIZE)]) for i in range(n)]
     
     def evaluate_nd(individual):
         if(individual.val_predictions != []):
@@ -166,17 +158,9 @@ def conda(X, y, base_learner_class):
 
     
     def mutate_ens(individual, nd_population):
-        if(len(individual) > 1 and random.random() < MUT_REDUCE_PB_ENS):
-            i = random.randint(0, len(individual) - 1)
-            #alternative implementation would be fitness dependent selection
-            individual.pop(i)
-        if(len(individual) < MAX_ENS_SIZE and random.random() < MUT_APPEND_PB_ENS):
-            new_nd = toolbox.join_ens_tournament(nd_population, 1)[0] #tournSel retourns list of selected individuals
-            individual.insert(random.randint(0, len(individual)), new_nd)
-        if(random.random() < MUT_ALTER_PB_ENS):
-            i = random.randint(0, len(individual) - 1)
-            new_nd = toolbox.join_ens_tournament(nd_population, 1)[0]
-            individual[i] = new_nd
+        i = random.randint(0, len(individual) - 1)
+        new_nd = toolbox.join_ens_tournament(nd_population, 1)[0]
+        individual[i] = new_nd
         
     def genetic_operation(parameters, operator, probability):
         if(not isinstance(parameters, tuple)):
