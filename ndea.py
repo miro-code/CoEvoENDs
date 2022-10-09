@@ -639,8 +639,8 @@ def test(id = None):
             print(experiment_configurations[experiment_id])
             single_experiment(*experiment_configurations[experiment_id], experiment_id)
         
-test(399)
-#main() 
+#test(399)
+main() 
 
 
 
