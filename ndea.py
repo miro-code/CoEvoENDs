@@ -93,7 +93,7 @@ def conda(X, y, base_learner_class):
     
     creator.create("ND_Fitness", base.Fitness, weights = (1.0, 1.0))
     creator.create("ND_Individual", list, fitness = creator.ND_Fitness, gen = 0, val_predictions = list, support = 0)
-    creator.create("Ens_Fitness", base.Fitness, weights = (1.0, -1.0))
+    creator.create("Ens_Fitness", base.Fitness, weights = (1.0, ))
     creator.create("Ens_Individual", list, fitness = creator.Ens_Fitness, gen = 0, val_predictions = list)
     
     def init_ens_population(n, nds):
@@ -144,7 +144,7 @@ def conda(X, y, base_learner_class):
         scores.pop(-1)
         scores.pop(0)
         accuracy = sum(scores)/len(scores)
-        return accuracy, len(individual)
+        return accuracy, 
     
     def mate_ens(child1, child2):
         if(len(child1) ==1 or len(child2) ==1):
@@ -263,7 +263,11 @@ def conda(X, y, base_learner_class):
             nd_population[1:] = toolbox.nd_population(N_POP_ND-1)
             toolbox.evaluate_population(toolbox.evaluate_nd, nd_population[1:])
             
-            ens_population_elite, _ = order_first_rank(ens_population)
+            ens_population_elite = [ens_population[0]]
+            pointer_ens = 1
+            while(pointer_ens < len(ens_population) and ens_population[pointer_ens].fitness.values[0] == ens_population_elite[0].fitness.values[0]):
+                ens_population_elite.append(ens_population[pointer_ens])
+                pointer_ens += 1
             ens_population[:] = ens_population_elite + toolbox.ens_population(N_POP_ENS - len(ens_population_elite), nd_population)
             #test
             if(len(ens_population) != N_POP_ENS):
@@ -304,8 +308,7 @@ def conda(X, y, base_learner_class):
                         child.gen = g+1
                         child.val_predictions = []
                         child.fitness.values = toolbox.evaluate_ens(child)
-            new_elite, rest = order_first_rank(toolbox.select(ens_population+ens_offspring, N_POP_ENS))
-            ens_population[:] = new_elite + rest
+            ens_population[:] = toolbox.select(ens_population+ens_offspring, N_POP_ENS)
         toolbox.count_nd_support(ens_population, nd_population)
         toolbox.evaluate_population(toolbox.evaluate_nd_support, nd_population)
         new_elite, rest = order_first_rank(toolbox.select(nd_population, N_POP_ND))
@@ -526,7 +529,7 @@ def display_population(pop):
 def log_result(experiment_id, method, base_learner, task, fold, accuracy, train_accuracy, ensemble_size, duration, other_results = None):
     log_message = "experiment id: {}, method: {}, base_learner: {} task: {}, fold: {}, accuracy: {}, train_accuracy: {}, ensemble_size: {}, duration: {}, other_results = {}\n".format(experiment_id, method, base_learner, task, fold, accuracy, train_accuracy, ensemble_size, duration, other_results)
     dirname = os.path.dirname(__file__)
-    results_dirname = os.path.join(dirname, 'results/' + str(experiment_id))
+    results_dirname = os.path.join(dirname, 'results-fixed/' + str(experiment_id))
     Path(results_dirname).mkdir(parents=True, exist_ok=True)
     filename = os.path.join(results_dirname, 'results.txt')
     with open(filename, "a") as f:
@@ -585,7 +588,7 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
             ensemble_accuracy = accuracy_score(y_test, ensemble_predictions)
             other_results.append(("size: "+ str(len(ensemble)), "test accuracy:" +str(ensemble_accuracy), "train accuracy: " + str(ens_train_accuracy)))
         top_nd_individuals_fitness_over_time = [(nd.fitness.values[0], nd.fitness.values[1]) for nd in top_nd_individuals_over_time]        
-        top_ens_individuals_fitness_over_time = [(ens.fitness.values[0],ens.fitness.values[1]) for ens in top_ens_individuals_over_time]
+        top_ens_individuals_fitness_over_time = [(ens.fitness.values[0],) for ens in top_ens_individuals_over_time]
         other_results.append("top nd individuals per generation: " + str(top_nd_individuals_fitness_over_time))
         other_results.append("top ens individuals per generation: " + str(top_ens_individuals_fitness_over_time))
     else:
@@ -636,8 +639,8 @@ def test(id = None):
             print(experiment_configurations[experiment_id])
             single_experiment(*experiment_configurations[experiment_id], experiment_id)
         
-#test(399)
-main() 
+test(399)
+#main() 
 
 
 
