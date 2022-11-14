@@ -9,7 +9,7 @@ import random
 
 def main():
     dirname = os.path.dirname(__file__)
-    results_dirname = os.path.join(dirname, 'results/')
+    results_dirname = os.path.join(dirname, 'results-fixed/')
 
     unavailable_results = []
     df = pd.DataFrame(columns=['experiment_id', 'method', 'base_learner', 'task_id', 'fold', 'test_accuracy', 'train_accuracy', 'ensemble_size', 'duration'])
@@ -227,4 +227,5 @@ def structure_example():
 
 #df = rp.test()
 #rp.compare_time(df)
-structure_example()
+#structure_example()
+main()
