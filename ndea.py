@@ -21,7 +21,6 @@ from sklearn.impute import SimpleImputer
 import time, openml
 from pathlib import Path
 
-#unseriös
 from sklearn.utils._testing import ignore_warnings
 from sklearn.exceptions import ConvergenceWarning
 
@@ -643,63 +642,5 @@ def test(id = None):
 main() 
 
 
-
-""" 
-#single run times
-start_time = time.time()
-task_id = 6
-task = openml.tasks.get_task(task_id)
-dataset = openml.datasets.get_dataset(task.dataset_id)
-X, y, categorical_indicator, attribute_names = dataset.get_data(target=dataset.default_target_attribute, dataset_format="dataframe")
-#preprocessing
-categorical_features = list(X.columns[categorical_indicator])
-numeric_features = list(X.columns[~np.array(categorical_indicator)])
-numeric_transformer = SimpleImputer(strategy="median")
-categorical_transformer = OneHotEncoder(sparse = False)
-preprocessor = ColumnTransformer(
-    transformers=[
-        ("num", numeric_transformer, numeric_features),
-        ("cat", categorical_transformer, categorical_features),
-    ]
-)
-X = preprocessor.fit_transform(X)
-
-train_indices, test_indices = task.get_train_test_split_indices(repeat=0, fold=0, sample=0)
-X_train, y_train, X_test, y_test = X[train_indices], y[train_indices], X[test_indices], y[test_indices]
-top_individual_blueprint = simple_ndea(X_train, y_train, LogisticRegression)[0].tree
-new_nd = NestedDichotomie(LogisticRegression)
-new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
-prediction = new_nd.predict(X_test)
-accuracy = accuracy_score(y_test, prediction)
-end_time = time.time()
-log_result("test", task_id, accuracy, end_time - start_time, [new_nd])
-
-
-
-from sklearn.tree import DecisionTreeClassifier
-
-
-dt = DecisionTreeClassifier()
-start = time.time()
-dt.fit(X,y)
-end = time.time()
-print(end-start)
-start = time.time()
-dt.fit(X,y)
-end = time.time()
-print(end-start)
-print(X.shape)
-
-new_nd = NestedDichotomie(LogisticRegression)
-fitstart = time.time()
-new_nd = new_nd.fit(X_train, y_train, top_individual_blueprint)
-fitend = time.time()
-prediction = new_nd.predict(X_test)
-predend = time.time()
-accuracy = accuracy_score(y_test, prediction)
-print(f"fitting took {fitend - fitstart}s and prediction took {predend - fitend}s")
-
-
- """
 
 

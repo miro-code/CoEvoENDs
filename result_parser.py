@@ -148,7 +148,7 @@ def compare_overfitting(df):
     mean_acc = df.loc[:, ["method", "base_learner", "task_id", "fold", "train_accuracy", "test_accuracy"]].groupby(["method", "base_learner", "task_id"]).mean().loc[:, ["train_accuracy", "test_accuracy"]]
     return mean_acc
 
-def compare_results2(df):
+def compare_results_over_all_tasks(df):
     mean_accuracies = df.loc[:, ["method", "base_learner", "task_id", "fold", "test_accuracy"]].groupby(["method", "base_learner", "task_id"]).mean().loc[:, "test_accuracy"]
     task_ids = set(mean_accuracies.index.get_level_values(2))
     base_learners = set(mean_accuracies.index.get_level_values(1))
@@ -225,7 +225,4 @@ def structure_example():
 
 
 
-#df = rp.test()
-#rp.compare_time(df)
-#structure_example()
 main()

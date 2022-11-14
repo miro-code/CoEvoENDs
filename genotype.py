@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sat May 21 18:51:33 2022
-
-@author: pro
-"""
 
 from util import BinaryTreeNode
 
