@@ -1,4 +1,3 @@
-from multiprocessing.sharedctypes import Value
 import random
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier

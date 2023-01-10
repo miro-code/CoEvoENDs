@@ -7,9 +7,9 @@ from matplotlib.lines import Line2D
 import random
 
 
-def main():
+def results_to_df(results_folder):
     dirname = os.path.dirname(__file__)
-    results_dirname = os.path.join(dirname, 'results-fixed/')
+    results_dirname = os.path.join(dirname, results_folder)
 
     unavailable_results = []
     df = pd.DataFrame(columns=['experiment_id', 'method', 'base_learner', 'task_id', 'fold', 'test_accuracy', 'train_accuracy', 'ensemble_size', 'duration'])
@@ -225,4 +225,5 @@ def structure_example():
 
 
 
-main()
+if __name__ == "__main__":
+    compare_results(results_to_df("results-fixed/"))
