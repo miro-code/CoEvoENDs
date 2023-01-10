@@ -611,7 +611,7 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
 
 def main():
     tasks = [2, 9, 40, 146204, 18, 9964, 41, 3022, 145681, 7]
-    base_learners = [DecisionTreeClassifier, DecisionStump]
+    base_learners = [DecisionTreeClassifier, DecisionStump, LogisticRegression]
     methods = ["ndea", "conda"]
     experiment_configurations = [(method, task_id, fold_id, base_learner) for method in methods for task_id in tasks for fold_id in range(10) for base_learner in base_learners]
     
