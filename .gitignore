@@ -2,3 +2,5 @@
 results/
 results-fixed/
 __pycache__/
+automl_conf_2023.db
+result.log

@@ -534,9 +534,17 @@ def log_result(experiment_id, method, base_learner, task, fold, accuracy, train_
     with open(filename, "a") as f:
         f.write(log_message)
 
-
 @ignore_warnings(category=ConvergenceWarning)
 def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
+    if(type(base_learner) == str):
+        if(base_learner == "DecisionTree"):
+            base_learner = DecisionTreeClassifier
+        elif(base_learner == "DecisionStump"):
+            base_learner = DecisionStump
+        elif(base_learner == "LogisticRegression"):
+            base_learner = LogisticRegression
+        else:
+            raise ValueError("Unrecognized base learner")
     task = openml.tasks.get_task(task_id)
     dataset = openml.datasets.get_dataset(task.dataset_id)
     X, y, categorical_indicator, attribute_names = dataset.get_data(target=dataset.default_target_attribute, dataset_format="dataframe")
@@ -600,10 +608,12 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
         base_learner_name = "Decision Tree"
     elif(base_learner == DecisionStump):
         base_learner_name = "Decision Stump"
+    elif(base_learner == LogisticRegression):
+        base_learner_name = "Logistic Regression"
     else:
         print("Unrecognized base learner")
         base_learner_name = str(base_learner)
-    log_result(experiment_id, method, base_learner_name, task_id, fold_id, accuracy, train_accuracy, ensemble_size, duration, other_results)
+    return (experiment_id, method, base_learner_name, task_id, fold_id, accuracy, train_accuracy, ensemble_size, duration, other_results)
 
 
 #simple_ndea_experiment(6)
@@ -620,7 +630,7 @@ def main():
         raise ValueError("Illegal experiment ID")
     
     
-    single_experiment(*experiment_configurations[experiment_id], experiment_id)
+    log_result(*single_experiment(*experiment_configurations[experiment_id], experiment_id))
     
 
 
@@ -632,14 +642,16 @@ def test(id = None):
     
     if(id is not None):
         print(experiment_configurations[id])
-        single_experiment(*experiment_configurations[id], id)
+        log_result(*single_experiment(*experiment_configurations[id], id))
     else:
         for experiment_id in range(len(experiment_configurations)):
             print(experiment_configurations[experiment_id])
-            single_experiment(*experiment_configurations[experiment_id], experiment_id)
+            log_result(*single_experiment(*experiment_configurations[experiment_id], experiment_id))
         
 #test(399)
-main() 
+
+if __name__ == "__main__":
+    main() 
 
 
 
