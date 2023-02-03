@@ -24,4 +24,3 @@ if __name__ == "__main__":
     experimenter = PyExperimenter("config/experiments.cfg" )
     experimenter.fill_table_from_config()
     experimenter.execute(run_experiment, max_experiments=1, random_order=True)
-    print(test)
