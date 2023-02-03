@@ -92,7 +92,7 @@ def conda(X, y, base_learner_class):
     
     creator.create("ND_Fitness", base.Fitness, weights = (1.0, 1.0))
     creator.create("ND_Individual", list, fitness = creator.ND_Fitness, gen = 0, val_predictions = list, support = 0)
-    creator.create("Ens_Fitness", base.Fitness, weights = (1.0, ))
+    creator.create("Ens_Fitness", base.Fitness, weights = (1.0, 1.0))
     creator.create("Ens_Individual", list, fitness = creator.Ens_Fitness, gen = 0, val_predictions = list)
     
     def init_ens_population(n, nds):
@@ -143,7 +143,15 @@ def conda(X, y, base_learner_class):
         scores.pop(-1)
         scores.pop(0)
         accuracy = sum(scores)/len(scores)
-        return accuracy, 
+
+        diversity = 0
+        individual_nds = set([])
+        for nd_individual in individual:
+            dist_matr = DistanceMatrix(classes, nd_individual)
+            tree = dist_matr.build_tree()
+            individual_nds.add(str(tree))
+
+        return accuracy, len(individual_nds)
     
     def mate_ens(child1, child2):
         if(len(child1) ==1 or len(child2) ==1):
@@ -544,7 +552,7 @@ def single_experiment(method, task_id, fold_id, base_learner, experiment_id=-1):
         elif(base_learner == "LogisticRegression"):
             base_learner = LogisticRegression
         else:
-            raise ValueError("Unrecognized base learner")
+            raise ValueError("Unrecognized base learner: {}".format(base_learner))
     task = openml.tasks.get_task(task_id)
     dataset = openml.datasets.get_dataset(task.dataset_id)
     X, y, categorical_indicator, attribute_names = dataset.get_data(target=dataset.default_target_attribute, dataset_format="dataframe")
